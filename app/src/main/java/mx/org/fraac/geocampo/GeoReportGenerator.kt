@@ -111,7 +111,7 @@ class GeoReportGenerator(
             datePaint
         )
         canvas.drawText(
-            "Generado con GeoCampo",
+            "Generado con TerraPin",
             PAGE_WIDTH - 26f,
             62f,
             datePaint
@@ -199,6 +199,7 @@ class GeoReportGenerator(
                 BaseMapMode.SATELLITE_ONLINE -> "Sentinel-2 online + calles"
                 BaseMapMode.SATELLITE_OFFLINE -> "Sentinel-2 offline + calles"
                 BaseMapMode.INEGI_ORTHO -> "INEGI Ortofoto HD + calles"
+                BaseMapMode.OPENAERIALMAP -> "OpenAerialMap HD + calles"
             },
             x,
             y,
@@ -294,7 +295,7 @@ class GeoReportGenerator(
             textSize = 10f
         }
         canvas.drawText(
-            "Forest Rangers Alliance A.C. · GeoCampo · Información geográfica de campo",
+            "Forest Rangers Alliance A.C. · TerraPin · Información geográfica de campo",
             28f,
             743f,
             textPaint
