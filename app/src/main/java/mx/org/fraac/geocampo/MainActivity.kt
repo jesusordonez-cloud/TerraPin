@@ -66,6 +66,8 @@ private fun GeoCampoScreen(vm: MainViewModel) {
     val satelliteDownloadProgress by vm.satelliteDownloadProgress.collectAsState()
     val satelliteDownloadStatus by vm.satelliteDownloadStatus.collectAsState()
     val satelliteDownloadedBytes by vm.satelliteDownloadedBytes.collectAsState()
+    val openAerialMapImagery by vm.openAerialMapImagery.collectAsState()
+    val openAerialMapSearching by vm.openAerialMapSearching.collectAsState()
 
     var showProjectDialog by remember { mutableStateOf(false) }
     var showBasemapDialog by remember { mutableStateOf(false) }
@@ -78,6 +80,7 @@ private fun GeoCampoScreen(vm: MainViewModel) {
     var selectedWaypoint by remember { mutableStateOf<Waypoint?>(null) }
 
     var baseMapMode by remember { mutableStateOf(BaseMapMode.MAP) }
+    var activeOpenAerialMap by remember { mutableStateOf<OpenAerialMapImagery?>(null) }
     var centerOnLocationToken by remember { mutableIntStateOf(0) }
     val snapshotBridge = remember { MapSnapshotBridge() }
 
@@ -214,7 +217,7 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                         ForestMark()
                         Column {
                             Text(
-                                "GeoCampo",
+                                "TerraPin",
                                 style = MaterialTheme.typography.titleLarge
                             )
                             Text(
@@ -343,6 +346,12 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                     trackPoints = trackPoints,
                     currentFix = currentFix,
                     satelliteOffline = satelliteOffline,
+                    openAerialMapImagery =
+                        if (baseMapMode == BaseMapMode.OPENAERIALMAP) {
+                            activeOpenAerialMap
+                        } else {
+                            openAerialMapImagery
+                        },
                     baseMapMode = baseMapMode,
                     centerOnLocationToken = centerOnLocationToken,
                     snapshotBridge = snapshotBridge,
@@ -355,7 +364,8 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                     },
                     onWaypointSelected = { waypoint ->
                         selectedWaypoint = waypoint
-                    }
+                    },
+                    onViewportChanged = vm::checkOpenAerialMapAvailability
                 )
 
                 Column(
@@ -396,16 +406,17 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                             }
                     ) {
                         Icon(
-                            if (baseMapMode == BaseMapMode.INEGI_ORTHO) {
-                                Icons.Default.Hd
-                            } else {
-                                Icons.Default.SatelliteAlt
+                            when (baseMapMode) {
+                                BaseMapMode.INEGI_ORTHO,
+                                BaseMapMode.OPENAERIALMAP -> Icons.Default.Hd
+                                else -> Icons.Default.SatelliteAlt
                             },
                             contentDescription = "Proveedor satelital",
                             tint =
                                 if (
                                     baseMapMode == BaseMapMode.SATELLITE_ONLINE ||
-                                    baseMapMode == BaseMapMode.INEGI_ORTHO
+                                    baseMapMode == BaseMapMode.INEGI_ORTHO ||
+                                    baseMapMode == BaseMapMode.OPENAERIALMAP
                                 ) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
@@ -450,6 +461,11 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                                     "Sentinel-2 Cloudless 2025 · ONLINE · EOX / Copernicus"
                                 BaseMapMode.INEGI_ORTHO ->
                                     "INEGI Ortofoto HD · ONLINE · fuente oficial"
+                                BaseMapMode.OPENAERIALMAP ->
+                                    "OpenAerialMap · " +
+                                        (activeOpenAerialMap?.resolutionLabel
+                                            ?: openAerialMapImagery?.resolutionLabel
+                                            ?: "imagen aérea HD")
                                 BaseMapMode.MAP -> ""
                             },
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
@@ -515,6 +531,7 @@ private fun GeoCampoScreen(vm: MainViewModel) {
     if (showImageryDialog) {
         ImageryProviderDialog(
             currentMode = baseMapMode,
+            openAerialMapImagery = openAerialMapImagery,
             onDismiss = { showImageryDialog = false },
             onUseSentinel = {
                 baseMapMode = BaseMapMode.SATELLITE_ONLINE
@@ -523,6 +540,14 @@ private fun GeoCampoScreen(vm: MainViewModel) {
             onUseInegi = {
                 baseMapMode = BaseMapMode.INEGI_ORTHO
                 showImageryDialog = false
+            },
+            onUseOpenAerialMap = {
+                val imagery = openAerialMapImagery
+                if (imagery != null) {
+                    activeOpenAerialMap = imagery
+                    baseMapMode = BaseMapMode.OPENAERIALMAP
+                    showImageryDialog = false
+                }
             }
         )
     }
@@ -679,7 +704,7 @@ private fun GeoCampoScreen(vm: MainViewModel) {
             confirmButton = {
                 TextButton(onClick = vm::clearMessage) { Text("Aceptar") }
             },
-            title = { Text("GeoCampo") },
+            title = { Text("TerraPin") },
             text = { Text(text) }
         )
     }
