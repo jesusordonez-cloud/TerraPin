@@ -368,6 +368,55 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                     onViewportChanged = vm::checkOpenAerialMapAvailability
                 )
 
+                if (
+                    openAerialMapImagery != null &&
+                    baseMapMode != BaseMapMode.OPENAERIALMAP
+                ) {
+                    ElevatedCard(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(start = 14.dp, end = 14.dp, top = 12.dp)
+                            .widthIn(max = 420.dp),
+                        colors = CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.TravelExplore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "Imagen aérea HD disponible",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Text(
+                                    openAerialMapImagery!!.resolutionLabel +
+                                        (openAerialMapImagery!!.date?.let {
+                                            " · " + it.take(10)
+                                        } ?: ""),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(
+                                onClick = {
+                                    activeOpenAerialMap = openAerialMapImagery
+                                    baseMapMode = BaseMapMode.OPENAERIALMAP
+                                }
+                            ) {
+                                Text("Usar")
+                            }
+                        }
+                    }
+                }
+
                 Column(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
@@ -398,7 +447,8 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                         containerColor =
                             if (
                                 baseMapMode == BaseMapMode.SATELLITE_ONLINE ||
-                                baseMapMode == BaseMapMode.INEGI_ORTHO
+                                baseMapMode == BaseMapMode.INEGI_ORTHO ||
+                                baseMapMode == BaseMapMode.OPENAERIALMAP
                             ) {
                                 MaterialTheme.colorScheme.primaryContainer
                             } else {
