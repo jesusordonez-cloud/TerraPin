@@ -20,6 +20,8 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -28,6 +30,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val context = app.applicationContext
@@ -37,6 +40,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val reportGenerator = GeoReportGenerator(context, db)
     private val regionExtractor = NativePmtilesExtractor(context)
     private val satelliteManager = SatelliteOfflineManager(context)
+    private val openAerialMapService = OpenAerialMapService()
     private val imagerySettings = ImagerySettings(context)
     private val fused = LocationServices.getFusedLocationProviderClient(context)
     private val prefs = context.getSharedPreferences("geocampo_preferences", 0)
@@ -126,6 +130,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _mapTilerValidationActive = MutableStateFlow(false)
     val mapTilerValidationActive = _mapTilerValidationActive.asStateFlow()
+
+    private val _openAerialMapImagery =
+        MutableStateFlow<OpenAerialMapImagery?>(null)
+    val openAerialMapImagery = _openAerialMapImagery.asStateFlow()
+
+    private val _openAerialMapSearching = MutableStateFlow(false)
+    val openAerialMapSearching = _openAerialMapSearching.asStateFlow()
+
+    private var openAerialMapJob: Job? = null
+    private var lastOpenAerialViewport: MapViewport? = null
 
     init {
         refreshFiles()
@@ -455,6 +469,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _message.value = "Configuración de MapTiler eliminada"
     }
 
+    fun checkOpenAerialMapAvailability(viewport: MapViewport) {
+        if (
+            viewport.zoom < 10.0 ||
+            viewport.lonSpan <= 0.0 ||
+            viewport.latSpan <= 0.0 ||
+            viewport.lonSpan > 3.0 ||
+            viewport.latSpan > 3.0
+        ) {
+            openAerialMapJob?.cancel()
+            _openAerialMapSearching.value = false
+            _openAerialMapImagery.value = null
+            return
+        }
+
+        val previous = lastOpenAerialViewport
+        if (previous != null) {
+            val sameZoom = abs(previous.zoom - viewport.zoom) < 0.45
+            val centerMove =
+                abs(previous.centerLat - viewport.centerLat) +
+                abs(previous.centerLon - viewport.centerLon)
+            val tolerance =
+                (viewport.latSpan + viewport.lonSpan).coerceAtLeast(0.01) * 0.12
+
+            if (sameZoom && centerMove < tolerance) return
+        }
+
+        openAerialMapJob?.cancel()
+        openAerialMapJob = viewModelScope.launch {
+            delay(650)
+            _openAerialMapSearching.value = true
+            lastOpenAerialViewport = viewport
+
+            val result = openAerialMapService.search(viewport)
+            result.onSuccess { imagery ->
+                _openAerialMapImagery.value = imagery
+            }.onFailure {
+                _openAerialMapImagery.value = null
+            }
+
+            _openAerialMapSearching.value = false
+        }
+    }
+
     fun startLiveLocation() {
         if (liveLocationStarted) return
         if (
@@ -712,6 +769,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        openAerialMapJob?.cancel()
         stopLiveLocation()
         super.onCleared()
     }
