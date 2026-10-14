@@ -609,7 +609,7 @@ private fun updateInegiOrtho(
     )
 
     map.getStyle { style ->
-        val source = style.getSourceAs<ImageSource>(INEGI_SOURCE_ID)
+        val source = style.getSource(INEGI_SOURCE_ID) as? ImageSource
         if (source == null) {
             style.addSource(
                 ImageSource(
