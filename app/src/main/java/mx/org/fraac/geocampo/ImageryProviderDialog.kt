@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Hd
 import androidx.compose.material.icons.filled.SatelliteAlt
+import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -13,9 +14,11 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun ImageryProviderDialog(
     currentMode: BaseMapMode,
+    openAerialMapImagery: OpenAerialMapImagery?,
     onDismiss: () -> Unit,
     onUseSentinel: () -> Unit,
-    onUseInegi: () -> Unit
+    onUseInegi: () -> Unit,
+    onUseOpenAerialMap: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -25,9 +28,52 @@ fun ImageryProviderDialog(
         title = { Text("Proveedor de imagen") },
         text = {
             Column(
-                modifier = Modifier.heightIn(max = 560.dp),
+                modifier = Modifier.heightIn(max = 620.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (openAerialMapImagery != null) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor =
+                                if (currentMode == BaseMapMode.OPENAERIALMAP) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                }
+                        )
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Default.TravelExplore, null)
+                                Column {
+                                    Text(
+                                        "OpenAerialMap HD disponible",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        openAerialMapImagery.resolutionLabel +
+                                            (openAerialMapImagery.date?.let { " · " + it.take(10) } ?: ""),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Button(onClick = onUseOpenAerialMap) {
+                                Icon(Icons.Default.Hd, null)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Usar imagen aérea")
+                            }
+                            openAerialMapImagery.provider?.let {
+                                Text(
+                                    "Proveedor: $it",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor =
