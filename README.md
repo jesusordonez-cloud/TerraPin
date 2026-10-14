@@ -1,26 +1,40 @@
-# GeoCampo · Android MVP 0.2
+# TerraPin
 
-GeoCampo es una aplicación Android nativa para trabajo geoespacial de campo con prioridad en operación **sin conexión a internet**, captura GPS y organización de evidencias por proyecto o ejido.
+Aplicación Android GIS de campo desarrollada por **Reynaldo Ordoñez**, orientada a trabajo forestal, georreferenciación, evidencias fotográficas y operación offline.
 
-## Novedades de la versión 0.2
+## Funciones principales
 
-- **Proyectos / ejidos de campo**: nombre del proyecto, ejido/comunidad, municipio y notas.
-- Puntos y recorridos asociados al proyecto activo.
-- **Evidencia fotográfica georreferenciada**: toma una fotografía desde la ficha de un punto y se almacena localmente en la aplicación.
-- **Exportación** del proyecto activo a GeoJSON, KML y GPX.
-- **Historial local** de puntos y recorridos por proyecto.
-- **Navegación básica a un punto**: distancia y rumbo desde la ubicación GPS actual.
-- **Medición sobre el mapa** de distancia acumulada y superficie.
-- Importación local de KML, KMZ, GPX, GeoJSON y Shapefile.
-- PMTiles raster como mapa base completamente local.
-- Grabación de recorridos GPS con servicio en primer plano.
-- Persistencia SQLite local.
-- Interfaz Jetpack Compose + Material 3 + MapLibre.
+- GPS en vivo y botón para centrar la posición.
+- Recorridos GPS y puntos georreferenciados.
+- Varias fotografías y descripción por punto.
+- Ficha visual al tocar un punto.
+- Proyectos/carpetas de campo.
+- Importación KML/KMZ, GPX, GeoJSON y Shapefile.
+- Exportación KML, KMZ con evidencias y Shapefile con fotografías.
+- Reporte ejecutivo PDF con mapa, logo FRAAC, fecha, elaboró, descripción y simbología.
+- Mapas base PMTiles para trabajo sin conexión.
+- Descarga de Sentinel-2 para uso satelital offline.
 
-## Compilar APK
+## Proveedores de imagen
 
-El proyecto incluye `.github/workflows/android.yml` para compilar automáticamente el APK mediante GitHub Actions.
+### INEGI Ortofoto HD
+Proveedor gratuito y oficial para México, sin API key. Se consume mediante el servicio WMS de INEGI. La cobertura y fecha varían por zona; donde existe ortofoto ofrece mayor detalle que Sentinel-2.
 
-El APK debug se genera en:
+### Sentinel-2 Cloudless / EOX
+Cobertura global abierta. Se mantiene como respaldo online y como fuente descargable para uso offline.
+
+El mapa vectorial PMTiles puede superponer caminos y límites sobre las imágenes.
+
+## Compatibilidad
+
+El applicationId se conserva como:
+
+`mx.org.fraac.geocampo`
+
+Esto evita romper la compatibilidad con datos locales de versiones anteriores.
+
+## Compilación
+
+GitHub Actions genera el APK debug en:
 
 `app/build/outputs/apk/debug/app-debug.apk`
