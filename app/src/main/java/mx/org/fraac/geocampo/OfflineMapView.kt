@@ -5,6 +5,8 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.os.Bundle
+import java.net.URI
+import java.util.Locale
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -20,6 +22,7 @@ import org.maplibre.android.annotations.PolygonOptions
 import org.maplibre.android.annotations.PolylineOptions
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngQuad
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
@@ -31,6 +34,7 @@ import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineOpacity
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
 import org.maplibre.android.style.layers.RasterLayer
+import org.maplibre.android.style.sources.ImageSource
 import org.maplibre.android.style.sources.RasterSource
 import org.maplibre.android.style.sources.VectorSource
 
@@ -38,7 +42,7 @@ enum class BaseMapMode {
     MAP,
     SATELLITE_ONLINE,
     SATELLITE_OFFLINE,
-    MAPTILER_HD
+    INEGI_ORTHO
 }
 
 class MapSnapshotBridge {
@@ -60,7 +64,6 @@ fun OfflineMapView(
     currentFix: TrackPoint?,
     satelliteOffline: PmTilesBasemap?,
     baseMapMode: BaseMapMode,
-    mapTilerApiKey: String,
     centerOnLocationToken: Int,
     snapshotBridge: MapSnapshotBridge,
     modifier: Modifier = Modifier,
@@ -142,15 +145,11 @@ fun OfflineMapView(
         map,
         basemap?.path,
         satelliteOffline?.path,
-        baseMapMode,
-        mapTilerApiKey
+        baseMapMode
     ) {
         val targetMap = map ?: return@LaunchedEffect
         val styleJson = when (baseMapMode) {
             BaseMapMode.SATELLITE_ONLINE -> SATELLITE_STYLE
-            BaseMapMode.MAPTILER_HD ->
-                if (mapTilerApiKey.isBlank()) EMPTY_STYLE
-                else mapTilerHybridStyle(mapTilerApiKey)
             else -> EMPTY_STYLE
         }
 
@@ -159,7 +158,7 @@ fun OfflineMapView(
                 BaseMapMode.MAP -> basemap
                 BaseMapMode.SATELLITE_OFFLINE -> satelliteOffline
                 BaseMapMode.SATELLITE_ONLINE,
-                BaseMapMode.MAPTILER_HD -> null
+                BaseMapMode.INEGI_ORTHO -> null
             }
 
             if (activeBase != null) {
@@ -175,7 +174,8 @@ fun OfflineMapView(
 
             if (
                 (baseMapMode == BaseMapMode.SATELLITE_ONLINE ||
-                    baseMapMode == BaseMapMode.SATELLITE_OFFLINE) &&
+                    baseMapMode == BaseMapMode.SATELLITE_OFFLINE ||
+                    baseMapMode == BaseMapMode.INEGI_ORTHO) &&
                 basemap?.isVector == true
             ) {
                 runCatching { addHybridRoadOverlay(style, basemap) }
@@ -225,6 +225,27 @@ fun OfflineMapView(
             .target(LatLng(fix.lat, fix.lon))
             .zoom(maxOf(targetMap.cameraPosition.zoom, 16.0))
             .build()
+    }
+
+    DisposableEffect(map, baseMapMode, styleEpoch) {
+        val targetMap = map
+        if (
+            targetMap == null ||
+            baseMapMode != BaseMapMode.INEGI_ORTHO ||
+            styleEpoch == 0
+        ) {
+            onDispose { }
+        } else {
+            val listener = MapLibreMap.OnCameraIdleListener {
+                updateInegiOrtho(targetMap, mapView)
+            }
+            targetMap.addOnCameraIdleListener(listener)
+            updateInegiOrtho(targetMap, mapView)
+
+            onDispose {
+                targetMap.removeOnCameraIdleListener(listener)
+            }
+        }
     }
 
     AndroidView(
@@ -543,33 +564,75 @@ private fun createLetterIcon(
 private fun withAlpha(color: Int, alpha: Int): Int =
     Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
 
-private fun mapTilerHybridStyle(apiKey: String): String {
-    val escaped = apiKey
-        .replace("\\", "\\\\")
-        .replace("\"", "\\\"")
+private fun updateInegiOrtho(
+    map: MapLibreMap,
+    mapView: MapView
+) {
+    val bounds = map.projection.visibleRegion.latLngBounds
+    val west = bounds.longitudeWest
+    val east = bounds.longitudeEast
+    val south = bounds.latitudeSouth
+    val north = bounds.latitudeNorth
 
-    return """
-    {
-      "version": 8,
-      "name": "GeoCampo MapTiler HD",
-      "sources": {
-        "maptiler-hybrid": {
-          "type": "raster",
-          "url": "https://api.maptiler.com/maps/hybrid/256/tiles.json?key=$escaped",
-          "tileSize": 256,
-          "attribution": "© MapTiler © OpenStreetMap contributors"
+    if (
+        !west.isFinite() || !east.isFinite() ||
+        !south.isFinite() || !north.isFinite() ||
+        west >= east || south >= north
+    ) return
+
+    val width = mapView.width.coerceIn(512, 1600)
+    val height = mapView.height.coerceIn(512, 1600)
+
+    val bbox = String.format(
+        Locale.US,
+        "%.8f,%.8f,%.8f,%.8f",
+        west,
+        south,
+        east,
+        north
+    )
+
+    val url =
+        "https://gaia.inegi.org.mx/NLB/tunnel/wms/wms61?" +
+            "SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap" +
+            "&LAYERS=Ortofotos&STYLES=" +
+            "&SRS=EPSG:4326" +
+            "&BBOX=$bbox" +
+            "&WIDTH=$width&HEIGHT=$height" +
+            "&FORMAT=image/jpeg&TRANSPARENT=FALSE"
+
+    val quad = LatLngQuad(
+        LatLng(north, west),
+        LatLng(north, east),
+        LatLng(south, east),
+        LatLng(south, west)
+    )
+
+    map.getStyle { style ->
+        val source = style.getSourceAs<ImageSource>(INEGI_SOURCE_ID)
+        if (source == null) {
+            style.addSource(
+                ImageSource(
+                    INEGI_SOURCE_ID,
+                    quad,
+                    URI(url)
+                )
+            )
+            style.addLayer(
+                RasterLayer(
+                    INEGI_LAYER_ID,
+                    INEGI_SOURCE_ID
+                )
+            )
+        } else {
+            source.setCoordinates(quad)
+            source.setUri(url)
         }
-      },
-      "layers": [
-        {
-          "id": "maptiler-hybrid",
-          "type": "raster",
-          "source": "maptiler-hybrid"
-        }
-      ]
     }
-    """.trimIndent()
 }
+
+private const val INEGI_SOURCE_ID = "inegi-ortofoto-source"
+private const val INEGI_LAYER_ID = "inegi-ortofoto-layer"
 
 private const val SATELLITE_STYLE =
     """{
