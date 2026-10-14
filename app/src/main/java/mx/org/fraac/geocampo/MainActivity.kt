@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,6 +26,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import java.util.Locale
@@ -685,45 +688,17 @@ private fun GeoCampoScreen(vm: MainViewModel) {
 @Composable
 private fun ForestMark(modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier.size(42.dp),
-        shape = RoundedCornerShape(13.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        tonalElevation = 1.dp
+        modifier = modifier.size(48.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        shadowElevation = 2.dp
     ) {
-        Canvas(Modifier.fillMaxSize().padding(6.dp)) {
-            val dark = Color(0xFF164A38)
-            val mid = Color(0xFF2F7D55)
-            val light = Color(0xFF74B98B)
-
-            fun tree(cx: Float, top: Float, width: Float, height: Float, color: Color) {
-                val crown = Path().apply {
-                    moveTo(cx, top)
-                    lineTo(cx - width / 2f, top + height * 0.72f)
-                    lineTo(cx - width * 0.18f, top + height * 0.72f)
-                    lineTo(cx - width * 0.42f, top + height)
-                    lineTo(cx + width * 0.42f, top + height)
-                    lineTo(cx + width * 0.18f, top + height * 0.72f)
-                    lineTo(cx + width / 2f, top + height * 0.72f)
-                    close()
-                }
-                drawPath(crown, color)
-                drawRect(
-                    color = dark,
-                    topLeft = Offset(cx - width * 0.08f, top + height),
-                    size = androidx.compose.ui.geometry.Size(width * 0.16f, height * 0.24f)
-                )
-            }
-
-            tree(size.width * 0.50f, size.height * 0.06f, size.width * 0.46f, size.height * 0.60f, dark)
-            tree(size.width * 0.25f, size.height * 0.30f, size.width * 0.34f, size.height * 0.46f, mid)
-            tree(size.width * 0.76f, size.height * 0.34f, size.width * 0.32f, size.height * 0.42f, light)
-
-            drawOval(
-                color = Color(0xFF1D6E57).copy(alpha = 0.25f),
-                topLeft = Offset(size.width * 0.08f, size.height * 0.82f),
-                size = androidx.compose.ui.geometry.Size(size.width * 0.84f, size.height * 0.12f)
-            )
-        }
+        Image(
+            painter = painterResource(R.drawable.terrapin_logo),
+            contentDescription = "Logo TerraPin",
+            modifier = Modifier.fillMaxSize().padding(3.dp),
+            contentScale = ContentScale.Fit
+        )
     }
 }
 
