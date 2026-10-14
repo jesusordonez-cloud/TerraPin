@@ -198,7 +198,7 @@ class GeoReportGenerator(
                 BaseMapMode.MAP -> "Cartográfico / PMTiles"
                 BaseMapMode.SATELLITE_ONLINE -> "Sentinel-2 online + calles"
                 BaseMapMode.SATELLITE_OFFLINE -> "Sentinel-2 offline + calles"
-                BaseMapMode.MAPTILER_HD -> "MapTiler Satellite Hybrid HD"
+                BaseMapMode.INEGI_ORTHO -> "INEGI Ortofoto HD + calles"
             },
             x,
             y,
