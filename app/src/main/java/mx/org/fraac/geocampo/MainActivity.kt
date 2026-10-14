@@ -63,9 +63,6 @@ private fun GeoCampoScreen(vm: MainViewModel) {
     val satelliteDownloadProgress by vm.satelliteDownloadProgress.collectAsState()
     val satelliteDownloadStatus by vm.satelliteDownloadStatus.collectAsState()
     val satelliteDownloadedBytes by vm.satelliteDownloadedBytes.collectAsState()
-    val mapTilerApiKey by vm.mapTilerApiKey.collectAsState()
-    val mapTilerPrintAllowed by vm.mapTilerPrintAllowed.collectAsState()
-    val mapTilerValidationActive by vm.mapTilerValidationActive.collectAsState()
 
     var showProjectDialog by remember { mutableStateOf(false) }
     var showBasemapDialog by remember { mutableStateOf(false) }
@@ -344,7 +341,6 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                     currentFix = currentFix,
                     satelliteOffline = satelliteOffline,
                     baseMapMode = baseMapMode,
-                    mapTilerApiKey = mapTilerApiKey,
                     centerOnLocationToken = centerOnLocationToken,
                     snapshotBridge = snapshotBridge,
                     modifier = Modifier.fillMaxSize(),
@@ -389,7 +385,7 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                         containerColor =
                             if (
                                 baseMapMode == BaseMapMode.SATELLITE_ONLINE ||
-                                baseMapMode == BaseMapMode.MAPTILER_HD
+                                baseMapMode == BaseMapMode.INEGI_ORTHO
                             ) {
                                 MaterialTheme.colorScheme.primaryContainer
                             } else {
@@ -397,7 +393,7 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                             }
                     ) {
                         Icon(
-                            if (baseMapMode == BaseMapMode.MAPTILER_HD) {
+                            if (baseMapMode == BaseMapMode.INEGI_ORTHO) {
                                 Icons.Default.Hd
                             } else {
                                 Icons.Default.SatelliteAlt
@@ -406,7 +402,7 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                             tint =
                                 if (
                                     baseMapMode == BaseMapMode.SATELLITE_ONLINE ||
-                                    baseMapMode == BaseMapMode.MAPTILER_HD
+                                    baseMapMode == BaseMapMode.INEGI_ORTHO
                                 ) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
@@ -449,8 +445,8 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                                     "Sentinel-2 Cloudless 2025 · OFFLINE · EOX / Copernicus"
                                 BaseMapMode.SATELLITE_ONLINE ->
                                     "Sentinel-2 Cloudless 2025 · ONLINE · EOX / Copernicus"
-                                BaseMapMode.MAPTILER_HD ->
-                                    "MapTiler Satellite Hybrid · HD · ONLINE"
+                                BaseMapMode.INEGI_ORTHO ->
+                                    "INEGI Ortofoto HD · ONLINE · fuente oficial"
                                 BaseMapMode.MAP -> ""
                             },
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
@@ -516,35 +512,14 @@ private fun GeoCampoScreen(vm: MainViewModel) {
     if (showImageryDialog) {
         ImageryProviderDialog(
             currentMode = baseMapMode,
-            mapTilerApiKey = mapTilerApiKey,
-            mapTilerPrintAllowed = mapTilerPrintAllowed,
-            validating = mapTilerValidationActive,
             onDismiss = { showImageryDialog = false },
             onUseSentinel = {
                 baseMapMode = BaseMapMode.SATELLITE_ONLINE
                 showImageryDialog = false
             },
-            onUseMapTiler = {
-                if (mapTilerApiKey.isNotBlank()) {
-                    baseMapMode = BaseMapMode.MAPTILER_HD
-                    showImageryDialog = false
-                } else {
-                    vm.notifyUser("Configura primero una API key válida de MapTiler.")
-                }
-            },
-            onSaveMapTiler = { key, printAllowed ->
-                vm.saveMapTilerSettings(key, printAllowed) { ok ->
-                    if (ok) {
-                        baseMapMode = BaseMapMode.MAPTILER_HD
-                        showImageryDialog = false
-                    }
-                }
-            },
-            onClearMapTiler = {
-                vm.clearMapTilerSettings()
-                if (baseMapMode == BaseMapMode.MAPTILER_HD) {
-                    baseMapMode = BaseMapMode.MAP
-                }
+            onUseInegi = {
+                baseMapMode = BaseMapMode.INEGI_ORTHO
+                showImageryDialog = false
             }
         )
     }
@@ -635,27 +610,16 @@ private fun GeoCampoScreen(vm: MainViewModel) {
             defaultDescription = activeProject?.notes.orEmpty(),
             onDismiss = { showPrintDialog = false },
             onGenerate = { data ->
-                if (
-                    baseMapMode == BaseMapMode.MAPTILER_HD &&
-                    !mapTilerPrintAllowed
-                ) {
-                    vm.notifyUser(
-                        "Tu configuración MapTiler no tiene habilitada la impresión/exportación. " +
-                            "Cambia a Sentinel/PMTiles para generar el PDF o activa esta autorización " +
-                            "solo si tu plan MapTiler la incluye."
-                    )
-                } else {
-                    showPrintDialog = false
-                    snapshotBridge.request { bitmap ->
-                        if (bitmap == null) {
-                            vm.notifyUser(
-                                "No fue posible capturar el mapa. Espera a que termine de cargar e inténtalo de nuevo."
-                            )
-                        } else {
-                            pendingReportData = data
-                            pendingReportBitmap = bitmap
-                            pdfLauncher.launch(vm.reportSuggestedName())
-                        }
+                showPrintDialog = false
+                snapshotBridge.request { bitmap ->
+                    if (bitmap == null) {
+                        vm.notifyUser(
+                            "No fue posible capturar el mapa. Espera a que termine de cargar e inténtalo de nuevo."
+                        )
+                    } else {
+                        pendingReportData = data
+                        pendingReportBitmap = bitmap
+                        pdfLauncher.launch(vm.reportSuggestedName())
                     }
                 }
             }
