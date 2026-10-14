@@ -42,7 +42,8 @@ enum class BaseMapMode {
     MAP,
     SATELLITE_ONLINE,
     SATELLITE_OFFLINE,
-    INEGI_ORTHO
+    INEGI_ORTHO,
+    OPENAERIALMAP
 }
 
 class MapSnapshotBridge {
@@ -63,17 +64,20 @@ fun OfflineMapView(
     trackPoints: List<TrackPoint>,
     currentFix: TrackPoint?,
     satelliteOffline: PmTilesBasemap?,
+    openAerialMapImagery: OpenAerialMapImagery?,
     baseMapMode: BaseMapMode,
     centerOnLocationToken: Int,
     snapshotBridge: MapSnapshotBridge,
     modifier: Modifier = Modifier,
     onLongPress: (GeoCoord) -> Unit,
-    onWaypointSelected: (Waypoint) -> Unit
+    onWaypointSelected: (Waypoint) -> Unit,
+    onViewportChanged: (MapViewport) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val longPressCallback by rememberUpdatedState(onLongPress)
     val waypointCallback by rememberUpdatedState(onWaypointSelected)
+    val viewportCallback by rememberUpdatedState(onViewportChanged)
     val markerWaypoints = remember { mutableMapOf<Long, Waypoint>() }
 
     val mapView = remember {
@@ -145,11 +149,14 @@ fun OfflineMapView(
         map,
         basemap?.path,
         satelliteOffline?.path,
+        openAerialMapImagery?.id,
         baseMapMode
     ) {
         val targetMap = map ?: return@LaunchedEffect
         val styleJson = when (baseMapMode) {
             BaseMapMode.SATELLITE_ONLINE -> SATELLITE_STYLE
+            BaseMapMode.OPENAERIALMAP ->
+                openAerialMapImagery?.let(::openAerialMapStyle) ?: EMPTY_STYLE
             else -> EMPTY_STYLE
         }
 
@@ -158,7 +165,8 @@ fun OfflineMapView(
                 BaseMapMode.MAP -> basemap
                 BaseMapMode.SATELLITE_OFFLINE -> satelliteOffline
                 BaseMapMode.SATELLITE_ONLINE,
-                BaseMapMode.INEGI_ORTHO -> null
+                BaseMapMode.INEGI_ORTHO,
+                BaseMapMode.OPENAERIALMAP -> null
             }
 
             if (activeBase != null) {
@@ -175,7 +183,8 @@ fun OfflineMapView(
             if (
                 (baseMapMode == BaseMapMode.SATELLITE_ONLINE ||
                     baseMapMode == BaseMapMode.SATELLITE_OFFLINE ||
-                    baseMapMode == BaseMapMode.INEGI_ORTHO) &&
+                    baseMapMode == BaseMapMode.INEGI_ORTHO ||
+                    baseMapMode == BaseMapMode.OPENAERIALMAP) &&
                 basemap?.isVector == true
             ) {
                 runCatching { addHybridRoadOverlay(style, basemap) }
@@ -241,6 +250,42 @@ fun OfflineMapView(
             }
             targetMap.addOnCameraIdleListener(listener)
             updateInegiOrtho(targetMap, mapView)
+
+            onDispose {
+                targetMap.removeOnCameraIdleListener(listener)
+            }
+        }
+    }
+
+    DisposableEffect(map) {
+        val targetMap = map
+        if (targetMap == null) {
+            onDispose { }
+        } else {
+            val listener = MapLibreMap.OnCameraIdleListener {
+                val bounds = targetMap.projection.visibleRegion.latLngBounds
+                if (
+                    bounds.longitudeWest.isFinite() &&
+                    bounds.longitudeEast.isFinite() &&
+                    bounds.latitudeSouth.isFinite() &&
+                    bounds.latitudeNorth.isFinite() &&
+                    bounds.longitudeWest < bounds.longitudeEast &&
+                    bounds.latitudeSouth < bounds.latitudeNorth
+                ) {
+                    viewportCallback(
+                        MapViewport(
+                            west = bounds.longitudeWest,
+                            south = bounds.latitudeSouth,
+                            east = bounds.longitudeEast,
+                            north = bounds.latitudeNorth,
+                            zoom = targetMap.cameraPosition.zoom
+                        )
+                    )
+                }
+            }
+
+            targetMap.addOnCameraIdleListener(listener)
+            listener.onCameraIdle()
 
             onDispose {
                 targetMap.removeOnCameraIdleListener(listener)
@@ -633,6 +678,43 @@ private fun updateInegiOrtho(
 
 private const val INEGI_SOURCE_ID = "inegi-ortofoto-source"
 private const val INEGI_LAYER_ID = "inegi-ortofoto-layer"
+
+private fun openAerialMapStyle(imagery: OpenAerialMapImagery): String {
+    val tile = imagery.tileTemplate
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+    val attribution = buildString {
+        append("OpenAerialMap / HOT")
+        imagery.provider?.let { append(" · " + it) }
+        imagery.license?.let { append(" · " + it) }
+    }
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+
+    return """
+    {
+      "version": 8,
+      "name": "TerraPin OpenAerialMap HD",
+      "sources": {
+        "oam": {
+          "type": "raster",
+          "tiles": ["$tile"],
+          "tileSize": 512,
+          "minzoom": 0,
+          "maxzoom": 23,
+          "attribution": "$attribution"
+        }
+      },
+      "layers": [
+        {
+          "id": "oam-imagery",
+          "type": "raster",
+          "source": "oam"
+        }
+      ]
+    }
+    """.trimIndent()
+}
 
 private const val SATELLITE_STYLE =
     """{
