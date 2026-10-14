@@ -38,3 +38,12 @@ Esto evita romper la compatibilidad con datos locales de versiones anteriores.
 GitHub Actions genera el APK debug en:
 
 `app/build/outputs/apk/debug/app-debug.apk`
+
+
+### OpenAerialMap
+TerraPin consulta automáticamente la API STAC moderna de OpenAerialMap para el área visible del mapa. Cuando existe cobertura, muestra un aviso con la resolución disponible y permite activar la mejor imagen aérea encontrada. OpenAerialMap utiliza imágenes abiertas de drones, aeronaves y otros proveedores, por lo que la cobertura varía por zona.
+
+
+## Identidad visual
+
+El ícono de TerraPin utiliza el pin ecológico con paisaje de selva, río, hojas y ruta georreferenciada definido para la aplicación.
