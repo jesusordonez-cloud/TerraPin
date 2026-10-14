@@ -12,8 +12,8 @@
         android:name=".GeoCampoApp"
         android:allowBackup="true"
         android:extractNativeLibs="true"
-        android:icon="@drawable/ic_app"
-        android:label="GeoCampo"
+        android:icon="@drawable/terrapin_logo"
+        android:label="TerraPin"
         android:supportsRtl="true"
         android:theme="@style/Theme.GeoCampo">
 
