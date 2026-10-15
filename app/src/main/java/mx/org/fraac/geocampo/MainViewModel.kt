@@ -720,29 +720,50 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun refreshFiles() {
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) { importer.loadAll() }
-            _layers.value = result.layers
-            _basemap.value = result.basemap
-            if (result.warnings.isNotEmpty()) {
-                _message.value = result.warnings.joinToString("\n")
+            runCatching {
+                withContext(Dispatchers.IO) { importer.loadAll() }
+            }.onSuccess { result ->
+                _layers.value = result.layers
+                _basemap.value = result.basemap
+                if (result.warnings.isNotEmpty()) {
+                    _message.value = result.warnings.joinToString("\n")
+                }
+            }.onFailure {
+                _layers.value = emptyList()
+                _basemap.value = null
+                _message.value =
+                    "TerraPin inició sin cargar mapas anteriores porque uno de los archivos locales no pudo leerse."
             }
         }
     }
 
     private fun refreshFolders() {
         viewModelScope.launch {
-            _folders.value = withContext(Dispatchers.IO) { db.getFolders() }
+            runCatching {
+                withContext(Dispatchers.IO) { db.getFolders() }
+            }.onSuccess {
+                _folders.value = it
+            }.onFailure {
+                _folders.value = emptyList()
+            }
         }
     }
 
     private fun refreshProjects() {
         viewModelScope.launch {
-            _projects.value = withContext(Dispatchers.IO) { db.getProjects() }
-            if (
-                _activeProjectId.value != null &&
-                _projects.value.none { it.id == _activeProjectId.value }
-            ) {
-                setActiveProject(null)
+            runCatching {
+                withContext(Dispatchers.IO) { db.getProjects() }
+            }.onSuccess { projects ->
+                _projects.value = projects
+                if (
+                    _activeProjectId.value != null &&
+                    _projects.value.none { it.id == _activeProjectId.value }
+                ) {
+                    setActiveProject(null)
+                }
+            }.onFailure {
+                _projects.value = emptyList()
+                _activeProjectId.value = null
             }
         }
     }
@@ -754,16 +775,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun refreshWaypoints() {
         viewModelScope.launch {
-            _waypoints.value = withContext(Dispatchers.IO) {
-                db.getWaypoints(_activeProjectId.value, filterByProject = true)
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    db.getWaypoints(_activeProjectId.value, filterByProject = true)
+                }
+            }.onSuccess {
+                _waypoints.value = it
+            }.onFailure {
+                _waypoints.value = emptyList()
             }
         }
     }
 
     private fun refreshTracks() {
         viewModelScope.launch {
-            _tracks.value = withContext(Dispatchers.IO) {
-                db.getTracks(_activeProjectId.value, filterByProject = true)
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    db.getTracks(_activeProjectId.value, filterByProject = true)
+                }
+            }.onSuccess {
+                _tracks.value = it
+            }.onFailure {
+                _tracks.value = emptyList()
             }
         }
     }
