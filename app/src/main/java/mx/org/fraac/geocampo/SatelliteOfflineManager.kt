@@ -110,7 +110,7 @@ class SatelliteOfflineManager(private val context: Context) {
             )
 
             downloadDirectPmtiles(
-                url = request.directPmtilesUrl,
+                url = requireNotNull(request.directPmtilesUrl),
                 target = target,
                 onProgress = onProgress
             )
