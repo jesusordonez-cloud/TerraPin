@@ -257,7 +257,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun downloadSatelliteRegion(request: SatelliteRegionRequest) {
         if (_satelliteDownloadActive.value) {
-            _message.value = "Ya hay una descarga satelital en curso"
+            _message.value = "Ya hay una descarga de imagen en curso"
             return
         }
 
@@ -275,7 +275,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         else p.completed.toFloat() / p.total.toFloat()
                     _satelliteDownloadedBytes.value = p.downloadedBytes
                     _satelliteDownloadStatus.value =
-                        "Descargando teselas " + p.completed + " de " + p.total + "…"
+                        p.stage ?: (
+                            "Descargando teselas " + p.completed + " de " + p.total + "…"
+                        )
                 }
             }.onSuccess { satellite ->
                 _satelliteOffline.value = satellite
@@ -298,7 +300,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteSatelliteOffline() {
         if (_satelliteDownloadActive.value) {
-            _message.value = "Espera a que termine la descarga satelital"
+            _message.value = "Espera a que termine la descarga de imagen"
             return
         }
         viewModelScope.launch {
