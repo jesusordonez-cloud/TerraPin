@@ -71,6 +71,7 @@ private fun GeoCampoScreen(vm: MainViewModel) {
     val satelliteDownloadedBytes by vm.satelliteDownloadedBytes.collectAsState()
     val openAerialMapImagery by vm.openAerialMapImagery.collectAsState()
     val openAerialMapSearching by vm.openAerialMapSearching.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var showProjectDialog by remember { mutableStateOf(false) }
     var showBasemapDialog by remember { mutableStateOf(false) }
@@ -198,6 +199,15 @@ private fun GeoCampoScreen(vm: MainViewModel) {
         onDispose { vm.stopLiveLocation() }
     }
 
+    LaunchedEffect(message) {
+        val text = message ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(
+            message = text,
+            withDismissAction = true
+        )
+        vm.clearMessage()
+    }
+
     fun withLocationPermission(block: () -> Unit) {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -214,27 +224,27 @@ private fun GeoCampoScreen(vm: MainViewModel) {
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        ForestMark()
+                        ForestMark(Modifier.size(40.dp))
                         Column {
                             Text(
                                 "TerraPin",
                                 style = MaterialTheme.typography.titleLarge
                             )
                             Text(
-                                "Desarrollada por Reynaldo Ordoñez",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                projects.firstOrNull { it.id == activeProjectId }?.displayName ?: "Sin proyecto",
-                                style = MaterialTheme.typography.labelSmall,
+                                projects.firstOrNull { it.id == activeProjectId }?.displayName
+                                    ?: "Selecciona un proyecto de campo",
+                                style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -242,22 +252,27 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                 },
                 actions = {
                     IconButton(onClick = { showProjectDialog = true }) {
-                        Icon(Icons.Default.Folder, contentDescription = "Proyecto")
-                    }
-                    IconButton(onClick = { showBasemapDialog = true }) {
-                        Icon(Icons.Default.Map, contentDescription = "Mapa base")
+                        Icon(Icons.Default.FolderOpen, contentDescription = "Proyectos")
                     }
                     IconButton(onClick = { showLayersDialog = true }) {
                         Icon(Icons.Default.Layers, contentDescription = "Capas")
                     }
                     Box {
                         IconButton(onClick = { showMoreMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "Herramientas")
+                            Icon(Icons.Default.MoreVert, contentDescription = "Más herramientas")
                         }
                         DropdownMenu(
                             expanded = showMoreMenu,
                             onDismissRequest = { showMoreMenu = false }
                         ) {
+                            DropdownMenuItem(
+                                text = { Text("Mapa base offline") },
+                                leadingIcon = { Icon(Icons.Default.Map, null) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    showBasemapDialog = true
+                                }
+                            )
                             DropdownMenuItem(
                                 text = { Text("Exportar proyecto") },
                                 leadingIcon = { Icon(Icons.Default.IosShare, null) },
@@ -280,24 +295,30 @@ private fun GeoCampoScreen(vm: MainViewModel) {
             )
         },
         bottomBar = {
-            Surface(shadowElevation = 8.dp) {
+            Surface(
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                tonalElevation = 8.dp,
+                shadowElevation = 10.dp
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .padding(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     FilledTonalButton(
                         onClick = { importLauncher.launch(arrayOf("*/*")) },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 12.dp)
                     ) {
                         Icon(Icons.Default.FileOpen, null)
                         Spacer(Modifier.width(5.dp))
-                        Text("Importar")
+                        Text("Archivos")
                     }
 
-                    FilledTonalButton(
+                    Button(
                         onClick = {
                             withLocationPermission {
                                 vm.requestCurrentFix { coord, accuracy ->
@@ -310,27 +331,34 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                                 }
                             }
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 12.dp)
                     ) {
                         Icon(Icons.Default.AddLocationAlt, null)
                         Spacer(Modifier.width(5.dp))
                         Text("Punto")
                     }
 
-                    Button(
+                    FilledTonalButton(
                         onClick = {
                             withLocationPermission {
                                 if (tracking.isTracking) vm.stopTracking() else vm.startTracking()
                             }
                         },
                         modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 12.dp),
                         colors = if (tracking.isTracking) {
-                            ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                        } else ButtonDefaults.buttonColors()
+                            ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        } else {
+                            ButtonDefaults.filledTonalButtonColors()
+                        }
                     ) {
                         Icon(if (tracking.isTracking) Icons.Default.Stop else Icons.Default.Route, null)
                         Spacer(Modifier.width(5.dp))
-                        Text(if (tracking.isTracking) "Detener" else "Ruta")
+                        Text(if (tracking.isTracking) "Parar" else "Ruta")
                     }
                 }
             }
@@ -378,6 +406,44 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                     }
                 )
 
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                    tonalElevation = 4.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            if (currentFix != null) Icons.Default.GpsFixed else Icons.Default.GpsOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = if (currentFix != null) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                        Column {
+                            Text(
+                                mapModeLabel(baseMapMode, offlineImagerySource),
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            Text(
+                                currentFix?.accuracy?.let { "GPS ±" + it.toInt() + " m" }
+                                    ?: "Esperando GPS",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
                 if (
                     openAerialMapImagery != null &&
                     baseMapMode != BaseMapMode.OPENAERIALMAP
@@ -415,13 +481,32 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            TextButton(
-                                onClick = {
-                                    activeOpenAerialMap = openAerialMapImagery
-                                    baseMapMode = BaseMapMode.OPENAERIALMAP
-                                }
+                            Column(
+                                horizontalAlignment = Alignment.End
                             ) {
-                                Text("Usar")
+                                TextButton(
+                                    onClick = {
+                                        activeOpenAerialMap = openAerialMapImagery
+                                        baseMapMode = BaseMapMode.OPENAERIALMAP
+                                    }
+                                ) {
+                                    Text("Ver")
+                                }
+                                TextButton(
+                                    onClick = {
+                                        offlineDialogInitialSource =
+                                            OfflineImagerySource.OPENAERIALMAP
+                                        showSatelliteOfflineDialog = true
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.DownloadForOffline,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Offline")
+                                }
                             }
                         }
                     }
@@ -798,16 +883,6 @@ private fun GeoCampoScreen(vm: MainViewModel) {
         )
     }
 
-    message?.let { text ->
-        AlertDialog(
-            onDismissRequest = vm::clearMessage,
-            confirmButton = {
-                TextButton(onClick = vm::clearMessage) { Text("Aceptar") }
-            },
-            title = { Text("TerraPin") },
-            text = { Text(text) }
-        )
-    }
 }
 
 @Composable
@@ -849,6 +924,19 @@ private fun ForestMark(modifier: Modifier = Modifier) {
         }
     }
 }
+
+private fun mapModeLabel(
+    mode: BaseMapMode,
+    offlineSource: OfflineImagerySource?
+): String =
+    when (mode) {
+        BaseMapMode.MAP -> "Mapa de campo"
+        BaseMapMode.SATELLITE_ONLINE -> "Sentinel · online"
+        BaseMapMode.INEGI_ORTHO -> "INEGI · online"
+        BaseMapMode.OPENAERIALMAP -> "OpenAerialMap · online"
+        BaseMapMode.SATELLITE_OFFLINE ->
+            (offlineSource?.label ?: "Imagen") + " · offline"
+    }
 
 @Composable
 private fun Metric(label: String, value: String) {
