@@ -11,6 +11,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
@@ -38,13 +39,15 @@ data class SatelliteRegionRequest(
     val maxZoom: Int,
     val source: OfflineImagerySource = OfflineImagerySource.SENTINEL,
     val tileTemplate: String? = null,
-    val sourceDetail: String? = null
+    val sourceDetail: String? = null,
+    val directPmtilesUrl: String? = null
 )
 
 data class SatelliteDownloadProgress(
     val completed: Int,
     val total: Int,
-    val downloadedBytes: Long
+    val downloadedBytes: Long,
+    val stage: String? = null
 )
 
 class SatelliteOfflineManager(private val context: Context) {
@@ -78,8 +81,66 @@ class SatelliteOfflineManager(private val context: Context) {
     ): PmTilesBasemap = withContext(Dispatchers.IO) {
         validate(request)
 
-        val minZoom = minZoomFor(request.source)
-        val tiles = enumerateTiles(request, minZoom)
+        val safe = request.name
+            .ifBlank { "imagen_offline" }
+            .lowercase(Locale.ROOT)
+            .replace(Regex("[^a-z0-9áéíóúñ_-]+"), "_")
+            .trim('_')
+            .ifBlank { "imagen_offline" }
+
+        val stamp = System.currentTimeMillis()
+        val target = File(
+            dir,
+            stamp.toString() + "_" +
+                request.source.name.lowercase(Locale.ROOT) + "_" +
+                safe + ".pmtiles"
+        )
+
+        if (
+            request.source == OfflineImagerySource.OPENAERIALMAP &&
+            !request.directPmtilesUrl.isNullOrBlank()
+        ) {
+            onProgress(
+                SatelliteDownloadProgress(
+                    completed = 0,
+                    total = 1000,
+                    downloadedBytes = 0L,
+                    stage = "Descargando paquete PMTiles de OpenAerialMap…"
+                )
+            )
+
+            downloadDirectPmtiles(
+                url = request.directPmtilesUrl,
+                target = target,
+                onProgress = onProgress
+            )
+
+            val binary = File(context.applicationInfo.nativeLibraryDir, "libpmtiles.so")
+            if (binary.exists()) verifyPmtiles(binary, target)
+
+            val parsed = PmTilesParser.read(target)
+            require(parsed.isRaster) {
+                target.delete()
+                "El paquete OpenAerialMap descargado no es una imagen raster compatible."
+            }
+
+            replacePreviousOfflineFile(target)
+            prefs.edit().putString(KEY_SOURCE, request.source.name).apply()
+
+            onProgress(
+                SatelliteDownloadProgress(
+                    completed = 1000,
+                    total = 1000,
+                    downloadedBytes = target.length(),
+                    stage = "OpenAerialMap offline listo"
+                )
+            )
+            return@withContext parsed
+        }
+
+        val effectiveRequest = preflightRequest(request, onProgress)
+        val minZoom = minZoomFor(effectiveRequest.source)
+        val tiles = enumerateTiles(effectiveRequest, minZoom)
 
         require(tiles.isNotEmpty()) {
             "No se encontraron teselas para el área seleccionada."
@@ -89,22 +150,16 @@ class SatelliteOfflineManager(private val context: Context) {
                 " teselas. Reduce el área o el nivel de zoom."
         }
 
-        val safe = request.name
-            .ifBlank { "imagen_offline" }
-            .lowercase(Locale.ROOT)
-            .replace(Regex("[^a-z0-9áéíóúñ_-]+"), "_")
-            .trim('_')
-            .ifBlank { "imagen_offline" }
-
-        val stamp = System.currentTimeMillis()
-        val mbtiles = File(dir, "tmp_" + stamp + ".mbtiles")
-        val target = File(
-            dir,
-            stamp.toString() + "_" +
-                request.source.name.lowercase(Locale.ROOT) + "_" +
-                safe + ".pmtiles"
+        onProgress(
+            SatelliteDownloadProgress(
+                completed = 0,
+                total = tiles.size,
+                downloadedBytes = 0L,
+                stage = "Preparando " + effectiveRequest.source.label + "…"
+            )
         )
 
+        val mbtiles = File(dir, "tmp_" + stamp + ".mbtiles")
         val db = SQLiteDatabase.openOrCreateDatabase(mbtiles, null)
         var tileFormat: String? = null
         var completed = 0
@@ -115,19 +170,24 @@ class SatelliteOfflineManager(private val context: Context) {
         try {
             createMbtilesSchema(db)
 
-            val concurrency = when (request.source) {
+            val concurrency = when (effectiveRequest.source) {
                 OfflineImagerySource.SENTINEL -> 4
                 OfflineImagerySource.INEGI -> 2
                 OfflineImagerySource.OPENAERIALMAP -> 3
             }
+            val batchSize = when (effectiveRequest.source) {
+                OfflineImagerySource.SENTINEL -> 24
+                OfflineImagerySource.INEGI -> 6
+                OfflineImagerySource.OPENAERIALMAP -> 6
+            }
             val semaphore = Semaphore(concurrency)
 
-            for (batch in tiles.chunked(40)) {
+            for (batch in tiles.chunked(batchSize)) {
                 val results = coroutineScope {
                     batch.map { tile ->
                         async(Dispatchers.IO) {
                             semaphore.withPermit {
-                                tile to downloadTile(tile, request)
+                                tile to downloadTile(tile, effectiveRequest, attempts = 3)
                             }
                         }
                     }.awaitAll()
@@ -162,38 +222,40 @@ class SatelliteOfflineManager(private val context: Context) {
                     SatelliteDownloadProgress(
                         completed = completed,
                         total = tiles.size,
-                        downloadedBytes = bytes
+                        downloadedBytes = bytes,
+                        stage = "Descargando " + effectiveRequest.source.label +
+                            " · " + completed + " de " + tiles.size
                     )
                 )
             }
 
             require(successes > 0 && tileFormat != null) {
-                when (request.source) {
+                when (effectiveRequest.source) {
                     OfflineImagerySource.INEGI ->
                         "INEGI no devolvió imágenes válidas para esta zona. " +
                             "Puede no existir cobertura de ortofoto o el servicio puede estar temporalmente ocupado."
                     OfflineImagerySource.OPENAERIALMAP ->
-                        "OpenAerialMap no devolvió imágenes válidas para esta zona. " +
-                            "Prueba con un área visible más pequeña."
+                        "OpenAerialMap no devolvió imágenes válidas dentro del área seleccionada. " +
+                            "Acerca el mapa y vuelve a intentar."
                     OfflineImagerySource.SENTINEL ->
                         "No se recibieron imágenes satelitales válidas."
                 }
             }
 
-            val allowedFailures = when (request.source) {
-                OfflineImagerySource.OPENAERIALMAP -> max(20, tiles.size / 2)
+            val allowedFailures = when (effectiveRequest.source) {
+                OfflineImagerySource.OPENAERIALMAP -> max(12, tiles.size * 2 / 3)
                 OfflineImagerySource.INEGI -> max(20, tiles.size / 3)
                 OfflineImagerySource.SENTINEL -> max(12, tiles.size / 8)
             }
 
             require(failures <= allowedFailures) {
                 "Fallaron demasiadas teselas (" + failures + " de " + tiles.size +
-                    "). Reduce el área, baja el zoom o inténtalo nuevamente con una conexión estable."
+                    "). Reduce el área, baja el zoom o inténtalo nuevamente."
             }
 
             insertMetadata(
                 db = db,
-                request = request,
+                request = effectiveRequest,
                 minZoom = minZoom,
                 format = tileFormat ?: "jpg"
             )
@@ -211,6 +273,15 @@ class SatelliteOfflineManager(private val context: Context) {
             "No se encontró el convertidor PMTiles en este dispositivo."
         }
 
+        onProgress(
+            SatelliteDownloadProgress(
+                completed = tiles.size,
+                total = tiles.size,
+                downloadedBytes = bytes,
+                stage = "Empaquetando mapa offline…"
+            )
+        )
+
         convertMbtiles(binary, mbtiles, target)
         mbtiles.delete()
 
@@ -227,6 +298,149 @@ class SatelliteOfflineManager(private val context: Context) {
             "El archivo descargado no fue reconocido como imagen raster."
         }
 
+        replacePreviousOfflineFile(target)
+        prefs.edit().putString(KEY_SOURCE, effectiveRequest.source.name).apply()
+        parsed
+    }
+
+    fun estimateTileCount(request: SatelliteRegionRequest): Int =
+        runCatching {
+            validate(request)
+            if (
+                request.source == OfflineImagerySource.OPENAERIALMAP &&
+                !request.directPmtilesUrl.isNullOrBlank()
+            ) {
+                1
+            } else {
+                enumerateTiles(request, minZoomFor(request.source)).size
+            }
+        }.getOrDefault(0)
+
+    private suspend fun preflightRequest(
+        request: SatelliteRegionRequest,
+        onProgress: (SatelliteDownloadProgress) -> Unit
+    ): SatelliteRegionRequest {
+        if (request.source == OfflineImagerySource.SENTINEL) return request
+
+        onProgress(
+            SatelliteDownloadProgress(
+                completed = 0,
+                total = 1,
+                downloadedBytes = 0L,
+                stage = "Validando cobertura de " + request.source.label + "…"
+            )
+        )
+
+        val minZoom = minZoomFor(request.source)
+        val centerLon = (request.west + request.east) / 2.0
+        val centerLat = (request.south + request.north) / 2.0
+
+        for (zoom in request.maxZoom downTo minZoom) {
+            val tile = Tile(
+                z = zoom,
+                x = lonToTileX(centerLon, zoom),
+                y = latToTileY(centerLat, zoom)
+            )
+
+            val data = downloadTile(tile, request, attempts = 2)
+            if (data != null && detectImageFormat(data) != null) {
+                return request.copy(maxZoom = zoom)
+            }
+        }
+
+        error(
+            when (request.source) {
+                OfflineImagerySource.OPENAERIALMAP ->
+                    "La imagen aparece en el catálogo, pero el servidor no entregó una tesela válida " +
+                        "para el centro del área. Acerca el mapa a la cobertura visible e inténtalo de nuevo."
+                OfflineImagerySource.INEGI ->
+                    "INEGI no entregó una ortofoto válida para el centro del área. " +
+                        "Prueba con otra zona o vuelve a intentarlo más tarde."
+                OfflineImagerySource.SENTINEL ->
+                    "No se pudo validar la fuente satelital."
+            }
+        )
+    }
+
+    private fun downloadDirectPmtiles(
+        url: String,
+        target: File,
+        onProgress: (SatelliteDownloadProgress) -> Unit
+    ) {
+        val temp = File(target.parentFile, target.name + ".part")
+        temp.delete()
+
+        try {
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15_000
+                readTimeout = 45_000
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "TerraPin-Android/0.5.7")
+                setRequestProperty("Accept", "application/octet-stream,*/*")
+            }
+
+            try {
+                val code = connection.responseCode
+                require(code in 200..299) {
+                    "OpenAerialMap respondió HTTP " + code + " al descargar PMTiles."
+                }
+
+                val expected = connection.contentLengthLong.takeIf { it > 0L }
+                var downloaded = 0L
+                var chunks = 0
+
+                connection.inputStream.use { input ->
+                    FileOutputStream(temp).use { output ->
+                        val buffer = ByteArray(128 * 1024)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read <= 0) break
+                            output.write(buffer, 0, read)
+                            downloaded += read
+                            chunks++
+
+                            if (chunks % 4 == 0) {
+                                val completed =
+                                    if (expected != null) {
+                                        ((downloaded.toDouble() / expected.toDouble()) * 1000.0)
+                                            .toInt()
+                                            .coerceIn(0, 999)
+                                    } else {
+                                        (chunks * 8).coerceAtMost(950)
+                                    }
+
+                                onProgress(
+                                    SatelliteDownloadProgress(
+                                        completed = completed,
+                                        total = 1000,
+                                        downloadedBytes = downloaded,
+                                        stage = "Descargando PMTiles de OpenAerialMap…"
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            } finally {
+                connection.disconnect()
+            }
+
+            require(temp.length() > 127L) {
+                "OpenAerialMap devolvió un paquete PMTiles vacío o incompleto."
+            }
+
+            if (!temp.renameTo(target)) {
+                temp.copyTo(target, overwrite = true)
+                temp.delete()
+            }
+        } catch (error: Exception) {
+            temp.delete()
+            target.delete()
+            throw error
+        }
+    }
+
+    private fun replacePreviousOfflineFile(target: File) {
         dir.listFiles()
             ?.filter {
                 it.isFile &&
@@ -234,16 +448,7 @@ class SatelliteOfflineManager(private val context: Context) {
                     it.absolutePath != target.absolutePath
             }
             ?.forEach { it.delete() }
-
-        prefs.edit().putString(KEY_SOURCE, request.source.name).apply()
-        parsed
     }
-
-    fun estimateTileCount(request: SatelliteRegionRequest): Int =
-        runCatching {
-            validate(request)
-            enumerateTiles(request, minZoomFor(request.source)).size
-        }.getOrDefault(0)
 
     private fun newestPmtiles(): File? =
         dir.listFiles()
@@ -268,10 +473,13 @@ class SatelliteOfflineManager(private val context: Context) {
                     "INEGI admite zoom de descarga entre 10 y 18"
                 }
             OfflineImagerySource.OPENAERIALMAP -> {
-                require(request.maxZoom in 10..18) {
-                    "OpenAerialMap admite zoom de descarga entre 10 y 18"
+                require(request.maxZoom in 14..20) {
+                    "OpenAerialMap admite zoom de descarga entre 14 y 20"
                 }
-                require(!request.tileTemplate.isNullOrBlank()) {
+                require(
+                    !request.tileTemplate.isNullOrBlank() ||
+                        !request.directPmtilesUrl.isNullOrBlank()
+                ) {
                     "No hay una imagen OpenAerialMap activa para descargar."
                 }
             }
@@ -287,8 +495,8 @@ class SatelliteOfflineManager(private val context: Context) {
     private fun minZoomFor(source: OfflineImagerySource): Int =
         when (source) {
             OfflineImagerySource.SENTINEL -> 0
-            OfflineImagerySource.INEGI,
-            OfflineImagerySource.OPENAERIALMAP -> 8
+            OfflineImagerySource.INEGI -> 10
+            OfflineImagerySource.OPENAERIALMAP -> 14
         }
 
     private fun enumerateTiles(
@@ -400,7 +608,7 @@ class SatelliteOfflineManager(private val context: Context) {
                 "%.7f,%.7f,%d",
                 centerLon,
                 centerLat,
-                min(request.maxZoom, 16)
+                min(request.maxZoom, 17)
             ),
             "minzoom" to minZoom.toString(),
             "maxzoom" to request.maxZoom.toString(),
@@ -435,7 +643,8 @@ class SatelliteOfflineManager(private val context: Context) {
 
     private fun downloadTile(
         tile: Tile,
-        request: SatelliteRegionRequest
+        request: SatelliteRegionRequest,
+        attempts: Int
     ): ByteArray? {
         val url = when (request.source) {
             OfflineImagerySource.SENTINEL -> sentinelTileUrl(tile)
@@ -443,13 +652,13 @@ class SatelliteOfflineManager(private val context: Context) {
             OfflineImagerySource.OPENAERIALMAP -> openAerialMapTileUrl(tile, request)
         }
 
-        repeat(4) { attempt ->
+        repeat(attempts) { attempt ->
             try {
                 val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 18_000
-                    readTimeout = 35_000
+                    connectTimeout = 10_000
+                    readTimeout = 20_000
                     instanceFollowRedirects = true
-                    setRequestProperty("User-Agent", "TerraPin-Android/0.5.6")
+                    setRequestProperty("User-Agent", "TerraPin-Android/0.5.7")
                     setRequestProperty("Accept", "image/jpeg,image/png,image/webp,image/*")
                     setRequestProperty("Cache-Control", "no-cache")
                 }
@@ -459,18 +668,18 @@ class SatelliteOfflineManager(private val context: Context) {
                     if (code == 404 || code == 204) return null
 
                     if (code == 429 || code >= 500) {
-                        Thread.sleep(700L * (attempt + 1))
+                        if (attempt < attempts - 1) Thread.sleep(500L * (attempt + 1))
                         return@repeat
                     }
 
                     if (code !in 200..299) {
-                        Thread.sleep(450L * (attempt + 1))
+                        if (attempt < attempts - 1) Thread.sleep(350L * (attempt + 1))
                         return@repeat
                     }
 
                     val data = connection.inputStream.use { it.readBytes() }
                     if (data.isEmpty() || detectImageFormat(data) == null) {
-                        Thread.sleep(350L * (attempt + 1))
+                        if (attempt < attempts - 1) Thread.sleep(300L * (attempt + 1))
                         return@repeat
                     }
                     return data
@@ -478,8 +687,8 @@ class SatelliteOfflineManager(private val context: Context) {
                     connection.disconnect()
                 }
             } catch (_: Exception) {
-                if (attempt < 3) {
-                    Thread.sleep(550L * (attempt + 1))
+                if (attempt < attempts - 1) {
+                    Thread.sleep(450L * (attempt + 1))
                 }
             }
         }
@@ -525,7 +734,6 @@ class SatelliteOfflineManager(private val context: Context) {
             .replace("{z}", tile.z.toString())
             .replace("{x}", tile.x.toString())
             .replace("{y}", tile.y.toString())
-            .replace("@2x", "@1x")
     }
 
     private fun detectImageFormat(data: ByteArray): String? {
