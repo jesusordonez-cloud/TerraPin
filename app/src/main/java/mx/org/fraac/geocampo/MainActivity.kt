@@ -64,6 +64,7 @@ private fun GeoCampoScreen(vm: MainViewModel) {
     val mapDownloadActive by vm.mapDownloadActive.collectAsState()
     val mapDownloadStatus by vm.mapDownloadStatus.collectAsState()
     val satelliteOffline by vm.satelliteOffline.collectAsState()
+    val offlineImagerySource by vm.offlineImagerySource.collectAsState()
     val satelliteDownloadActive by vm.satelliteDownloadActive.collectAsState()
     val satelliteDownloadProgress by vm.satelliteDownloadProgress.collectAsState()
     val satelliteDownloadStatus by vm.satelliteDownloadStatus.collectAsState()
@@ -83,6 +84,10 @@ private fun GeoCampoScreen(vm: MainViewModel) {
 
     var baseMapMode by remember { mutableStateOf(BaseMapMode.MAP) }
     var activeOpenAerialMap by remember { mutableStateOf<OpenAerialMapImagery?>(null) }
+    var offlineDialogInitialSource by remember {
+        mutableStateOf(OfflineImagerySource.SENTINEL)
+    }
+    var visibleViewport by remember { mutableStateOf<MapViewport?>(null) }
     var centerOnLocationToken by remember { mutableIntStateOf(0) }
     val snapshotBridge = remember { MapSnapshotBridge() }
 
@@ -367,7 +372,10 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                     onWaypointSelected = { waypoint ->
                         selectedWaypoint = waypoint
                     },
-                    onViewportChanged = vm::checkOpenAerialMapAvailability
+                    onViewportChanged = { viewport ->
+                        visibleViewport = viewport
+                        vm.checkOpenAerialMapAvailability(viewport)
+                    }
                 )
 
                 if (
@@ -478,7 +486,19 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                     }
 
                     SmallFloatingActionButton(
-                        onClick = { showSatelliteOfflineDialog = true },
+                        onClick = {
+                            offlineDialogInitialSource =
+                                when (baseMapMode) {
+                                    BaseMapMode.INEGI_ORTHO ->
+                                        OfflineImagerySource.INEGI
+                                    BaseMapMode.OPENAERIALMAP ->
+                                        OfflineImagerySource.OPENAERIALMAP
+                                    else ->
+                                        offlineImagerySource
+                                            ?: OfflineImagerySource.SENTINEL
+                                }
+                            showSatelliteOfflineDialog = true
+                        },
                         containerColor = if (baseMapMode == BaseMapMode.SATELLITE_OFFLINE) {
                             MaterialTheme.colorScheme.primaryContainer
                         } else {
@@ -487,7 +507,7 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                     ) {
                         Icon(
                             Icons.Default.DownloadForOffline,
-                            contentDescription = "Descargar o usar satélite offline",
+                            contentDescription = "Descargar o usar imagen offline",
                             tint = if (satelliteOffline != null) {
                                 MaterialTheme.colorScheme.primary
                             } else {
@@ -508,7 +528,16 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                         Text(
                             when (baseMapMode) {
                                 BaseMapMode.SATELLITE_OFFLINE ->
-                                    "Sentinel-2 Cloudless 2025 · OFFLINE · EOX / Copernicus"
+                                    when (offlineImagerySource) {
+                                        OfflineImagerySource.INEGI ->
+                                            "INEGI Ortofoto HD · OFFLINE"
+                                        OfflineImagerySource.OPENAERIALMAP ->
+                                            "OpenAerialMap · OFFLINE"
+                                        OfflineImagerySource.SENTINEL ->
+                                            "Sentinel-2 Cloudless 2025 · OFFLINE · EOX / Copernicus"
+                                        null ->
+                                            "Imagen raster · OFFLINE"
+                                    }
                                 BaseMapMode.SATELLITE_ONLINE ->
                                     "Sentinel-2 Cloudless 2025 · ONLINE · EOX / Copernicus"
                                 BaseMapMode.INEGI_ORTHO ->
@@ -600,6 +629,21 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                     baseMapMode = BaseMapMode.OPENAERIALMAP
                     showImageryDialog = false
                 }
+            },
+            onDownloadSentinel = {
+                offlineDialogInitialSource = OfflineImagerySource.SENTINEL
+                showImageryDialog = false
+                showSatelliteOfflineDialog = true
+            },
+            onDownloadInegi = {
+                offlineDialogInitialSource = OfflineImagerySource.INEGI
+                showImageryDialog = false
+                showSatelliteOfflineDialog = true
+            },
+            onDownloadOpenAerialMap = {
+                offlineDialogInitialSource = OfflineImagerySource.OPENAERIALMAP
+                showImageryDialog = false
+                showSatelliteOfflineDialog = true
             }
         )
     }
@@ -607,6 +651,10 @@ private fun GeoCampoScreen(vm: MainViewModel) {
     if (showSatelliteOfflineDialog) {
         SatelliteOfflineDialog(
             satellite = satelliteOffline,
+            activeSource = offlineImagerySource,
+            initialSource = offlineDialogInitialSource,
+            openAerialMapImagery = activeOpenAerialMap ?: openAerialMapImagery,
+            visibleViewport = visibleViewport,
             currentFix = currentFix,
             busy = satelliteDownloadActive,
             progress = satelliteDownloadProgress,
