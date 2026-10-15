@@ -59,7 +59,7 @@ jobs:
           from pathlib import Path
           from PIL import Image
 
-          src = Path("app/src/main/res/drawable/terrapin_logo.png")
+          src = Path("app/src/main/res/drawable/terrapin_logo.webp")
           img = Image.open(src).convert("RGBA")
           res = Path("app/src/main/res")
 
