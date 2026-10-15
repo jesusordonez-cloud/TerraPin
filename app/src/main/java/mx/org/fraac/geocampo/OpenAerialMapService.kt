@@ -48,7 +48,7 @@ class OpenAerialMapService {
     suspend fun search(viewport: MapViewport): Result<OpenAerialMapImagery?> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val features = searchFeatures(viewport)
+                val features = retry(3) { searchFeatures(viewport) }
                 if (features.isEmpty()) return@runCatching null
 
                 val ranked = features
@@ -63,7 +63,9 @@ class OpenAerialMapService {
 
                 for (candidate in ranked.take(8)) {
                     val tiles = runCatching {
-                        fetchTileTemplate(candidate.collection, candidate.id)
+                        retry(3) {
+                            fetchTileTemplate(candidate.collection, candidate.id)
+                        }
                     }.getOrNull()
 
                     if (!tiles.isNullOrBlank()) {
@@ -92,7 +94,7 @@ class OpenAerialMapService {
             connectTimeout = 12_000
             readTimeout = 20_000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "TerraPin-Android/0.5.3")
+            setRequestProperty("User-Agent", "TerraPin-Android/0.5.6")
             setRequestProperty("Accept", "application/geo+json,application/json")
             setRequestProperty("Content-Type", "application/json")
         }
@@ -174,7 +176,7 @@ class OpenAerialMapService {
             connectTimeout = 12_000
             readTimeout = 20_000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "TerraPin-Android/0.5.3")
+            setRequestProperty("User-Agent", "TerraPin-Android/0.5.6")
             setRequestProperty("Accept", "application/json")
         }
 
@@ -223,6 +225,21 @@ class OpenAerialMapService {
         if (queryParts.none { it.contains("assets=") }) queryParts += "assets=visual"
 
         return path + "@2x?" + queryParts.joinToString("&")
+    }
+
+    private fun <T> retry(attempts: Int, block: () -> T): T {
+        var lastError: Exception? = null
+        repeat(attempts) { index ->
+            try {
+                return block()
+            } catch (error: Exception) {
+                lastError = error
+                if (index < attempts - 1) {
+                    Thread.sleep(500L * (index + 1))
+                }
+            }
+        }
+        throw lastError ?: IllegalStateException("No se pudo consultar OpenAerialMap")
     }
 
     private fun pathSegment(value: String): String =
