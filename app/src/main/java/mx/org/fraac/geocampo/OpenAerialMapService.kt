@@ -33,7 +33,12 @@ data class OpenAerialMapImagery(
     val provider: String?,
     val gsdMeters: Double?,
     val license: String?,
-    val tileTemplate: String
+    val tileTemplate: String,
+    val offlinePmtilesUrl: String?,
+    val coverageWest: Double?,
+    val coverageSouth: Double?,
+    val coverageEast: Double?,
+    val coverageNorth: Double?
 ) {
     val resolutionLabel: String
         get() = when {
@@ -42,6 +47,9 @@ data class OpenAerialMapImagery(
             gsdMeters < 1.0 -> String.format(Locale.US, "%.1f cm/píxel", gsdMeters * 100.0)
             else -> String.format(Locale.US, "%.1f m/píxel", gsdMeters)
         }
+
+    val hasDirectOfflinePackage: Boolean
+        get() = !offlinePmtilesUrl.isNullOrBlank()
 }
 
 class OpenAerialMapService {
@@ -51,7 +59,7 @@ class OpenAerialMapService {
                 val features = retry(3) { searchFeatures(viewport) }
                 if (features.isEmpty()) return@runCatching null
 
-                val ranked = features
+                features
                     .mapNotNull(::parseCandidate)
                     .sortedWith(
                         compareBy<OpenAerialMapCandidate> {
@@ -60,30 +68,8 @@ class OpenAerialMapService {
                             it.date.orEmpty()
                         }
                     )
-
-                for (candidate in ranked.take(8)) {
-                    val tiles = runCatching {
-                        retry(3) {
-                            fetchTileTemplate(candidate.collection, candidate.id)
-                        }
-                    }.getOrNull()
-
-                    if (!tiles.isNullOrBlank()) {
-                        return@runCatching OpenAerialMapImagery(
-                            id = candidate.id,
-                            collection = candidate.collection,
-                            title = candidate.title,
-                            date = candidate.date,
-                            platform = candidate.platform,
-                            provider = candidate.provider,
-                            gsdMeters = candidate.gsdMeters,
-                            license = candidate.license,
-                            tileTemplate = tiles
-                        )
-                    }
-                }
-
-                null
+                    .firstOrNull()
+                    ?.let(::toImagery)
             }
         }
 
@@ -91,16 +77,20 @@ class OpenAerialMapService {
         val connection = (URL("$STAC_URL/search").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
-            connectTimeout = 12_000
-            readTimeout = 20_000
+            connectTimeout = 10_000
+            readTimeout = 18_000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "TerraPin-Android/0.5.6")
+            setRequestProperty("User-Agent", "TerraPin-Android/0.5.7")
             setRequestProperty("Accept", "application/geo+json,application/json")
             setRequestProperty("Content-Type", "application/json")
         }
 
         val body = JSONObject().apply {
-            put("limit", 12)
+            put("limit", 16)
+            put(
+                "collections",
+                JSONArray().apply { put(OAM_COLLECTION) }
+            )
             put(
                 "bbox",
                 JSONArray().apply {
@@ -135,11 +125,25 @@ class OpenAerialMapService {
 
     private fun parseCandidate(feature: JSONObject): OpenAerialMapCandidate? {
         val id = feature.optString("id").takeIf { it.isNotBlank() } ?: return null
-        val collection = feature.optString("collection").takeIf { it.isNotBlank() } ?: return null
+        val collection = feature.optString("collection")
+            .takeIf { it.isNotBlank() }
+            ?: OAM_COLLECTION
         val props = feature.optJSONObject("properties") ?: JSONObject()
 
         val gsd = props.optDouble("gsd", Double.NaN)
             .takeIf { it.isFinite() && it > 0.0 }
+
+        val bbox = feature.optJSONArray("bbox")
+        val west = bbox?.optDouble(0, Double.NaN)?.takeIf(Double::isFinite)
+        val south = bbox?.optDouble(1, Double.NaN)?.takeIf(Double::isFinite)
+        val east = bbox?.optDouble(2, Double.NaN)?.takeIf(Double::isFinite)
+        val north = bbox?.optDouble(3, Double.NaN)?.takeIf(Double::isFinite)
+
+        val assets = feature.optJSONObject("assets")
+        val pmtilesUrl = assets
+            ?.optJSONObject("pmtiles")
+            ?.optString("href")
+            ?.takeIf { it.startsWith("https://") }
 
         return OpenAerialMapCandidate(
             id = id,
@@ -161,70 +165,40 @@ class OpenAerialMapService {
                 props.optString("provider")
             ),
             gsdMeters = gsd,
-            license = props.optString("license").takeIf { it.isNotBlank() }
+            license = props.optString("license").takeIf { it.isNotBlank() },
+            pmtilesUrl = pmtilesUrl,
+            west = west,
+            south = south,
+            east = east,
+            north = north
         )
     }
 
-    private fun fetchTileTemplate(collection: String, id: String): String? {
+    private fun toImagery(candidate: OpenAerialMapCandidate): OpenAerialMapImagery {
+        val collection = candidate.collection.ifBlank { OAM_COLLECTION }
         val collectionEncoded = pathSegment(collection)
-        val idEncoded = pathSegment(id)
-        val endpoint =
-            "$RASTER_URL/collections/$collectionEncoded/items/$idEncoded/tiles"
+        val idEncoded = pathSegment(candidate.id)
 
-        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 12_000
-            readTimeout = 20_000
-            instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "TerraPin-Android/0.5.6")
-            setRequestProperty("Accept", "application/json")
-        }
+        val tileTemplate =
+            "$RASTER_URL/collections/$collectionEncoded/items/$idEncoded/" +
+                "tiles/WebMercatorQuad/{z}/{x}/{y}?assets=visual&nodata=0"
 
-        try {
-            val code = connection.responseCode
-            require(code in 200..299) { "Tiles OAM respondió HTTP $code" }
-
-            val json = connection.inputStream.bufferedReader().use { it.readText() }
-            val tilesets = JSONObject(json).optJSONArray("tilesets") ?: return null
-
-            for (i in 0 until tilesets.length()) {
-                val links = tilesets.optJSONObject(i)
-                    ?.optJSONArray("links")
-                    ?: continue
-
-                for (j in 0 until links.length()) {
-                    val link = links.optJSONObject(j) ?: continue
-                    if (link.optString("rel") != "tile") continue
-
-                    val href = link.optString("href")
-                    if (href.isBlank() || !href.contains("WebMercatorQuad")) continue
-
-                    return normalizeTileTemplate(href)
-                }
-            }
-
-            return null
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    private fun normalizeTileTemplate(href: String): String {
-        val normalized = href
-            .replace("{tileMatrix}", "{z}")
-            .replace("{tileCol}", "{x}")
-            .replace("{tileRow}", "{y}")
-
-        val path = normalized.substringBefore("?")
-            .removeSuffix("@1x")
-            .removeSuffix("@2x")
-        val oldQuery = normalized.substringAfter("?", "")
-        val queryParts = mutableListOf<String>()
-
-        if (oldQuery.isNotBlank()) queryParts += oldQuery
-        if (queryParts.none { it.contains("assets=") }) queryParts += "assets=visual"
-
-        return path + "@2x?" + queryParts.joinToString("&")
+        return OpenAerialMapImagery(
+            id = candidate.id,
+            collection = collection,
+            title = candidate.title,
+            date = candidate.date,
+            platform = candidate.platform,
+            provider = candidate.provider,
+            gsdMeters = candidate.gsdMeters,
+            license = candidate.license,
+            tileTemplate = tileTemplate,
+            offlinePmtilesUrl = candidate.pmtilesUrl,
+            coverageWest = candidate.west,
+            coverageSouth = candidate.south,
+            coverageEast = candidate.east,
+            coverageNorth = candidate.north
+        )
     }
 
     private fun <T> retry(attempts: Int, block: () -> T): T {
@@ -235,7 +209,7 @@ class OpenAerialMapService {
             } catch (error: Exception) {
                 lastError = error
                 if (index < attempts - 1) {
-                    Thread.sleep(500L * (index + 1))
+                    Thread.sleep(450L * (index + 1))
                 }
             }
         }
@@ -257,11 +231,17 @@ class OpenAerialMapService {
         val platform: String?,
         val provider: String?,
         val gsdMeters: Double?,
-        val license: String?
+        val license: String?,
+        val pmtilesUrl: String?,
+        val west: Double?,
+        val south: Double?,
+        val east: Double?,
+        val north: Double?
     )
 
     companion object {
         private const val STAC_URL = "https://api.imagery.hotosm.org/stac"
         private const val RASTER_URL = "https://api.imagery.hotosm.org/raster"
+        private const val OAM_COLLECTION = "openaerialmap"
     }
 }

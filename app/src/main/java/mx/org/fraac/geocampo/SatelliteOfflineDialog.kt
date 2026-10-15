@@ -78,13 +78,26 @@ fun SatelliteOfflineDialog(
         south: Double,
         east: Double,
         north: Double
-    ): SatelliteRegionRequest =
-        SatelliteRegionRequest(
+    ): SatelliteRegionRequest? {
+        val clipped =
+            if (source == OfflineImagerySource.OPENAERIALMAP) {
+                clipToOamCoverage(
+                    west = west,
+                    south = south,
+                    east = east,
+                    north = north,
+                    imagery = openAerialMapImagery
+                ) ?: return null
+            } else {
+                DownloadBox(west, south, east, north)
+            }
+
+        return SatelliteRegionRequest(
             name = name,
-            west = west,
-            south = south,
-            east = east,
-            north = north,
+            west = clipped.west,
+            south = clipped.south,
+            east = clipped.east,
+            north = clipped.north,
             maxZoom = maxZoom,
             source = source,
             tileTemplate =
@@ -100,6 +113,7 @@ fun SatelliteOfflineDialog(
                     null
                 }
         )
+    }
 
     val visibleRequest = remember(
         visibleViewport,
@@ -152,6 +166,44 @@ fun SatelliteOfflineDialog(
             } else {
                 null
             }
+        }
+    }
+
+    val directOamRequest = remember(
+        source,
+        maxZoom,
+        openAerialMapImagery,
+        sourceDetail
+    ) {
+        val imagery = openAerialMapImagery
+        val url = imagery?.offlinePmtilesUrl
+        if (
+            source == OfflineImagerySource.OPENAERIALMAP &&
+            imagery != null &&
+            !url.isNullOrBlank()
+        ) {
+            val west = imagery.coverageWest
+            val south = imagery.coverageSouth
+            val east = imagery.coverageEast
+            val north = imagery.coverageNorth
+            if (west != null && south != null && east != null && north != null) {
+                SatelliteRegionRequest(
+                    name = "OpenAerialMap_Imagen_completa",
+                    west = west,
+                    south = south,
+                    east = east,
+                    north = north,
+                    maxZoom = maxZoom,
+                    source = OfflineImagerySource.OPENAERIALMAP,
+                    tileTemplate = imagery.tileTemplate,
+                    sourceDetail = sourceDetail,
+                    directPmtilesUrl = url
+                )
+            } else {
+                null
+            }
+        } else {
+            null
         }
     }
 
@@ -355,6 +407,19 @@ fun SatelliteOfflineDialog(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Text(
+                            if (openAerialMapImagery.hasDirectOfflinePackage) {
+                                "✓ Esta imagen ofrece un paquete PMTiles directo para offline."
+                            } else {
+                                "TerraPin recortará la descarga a la cobertura real de esta imagen."
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (openAerialMapImagery.hasDirectOfflinePackage) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
                     }
                 }
 
@@ -387,6 +452,40 @@ fun SatelliteOfflineDialog(
                                 enabled = !busy,
                                 label = { Text("Z" + zoom) }
                             )
+                        }
+                    }
+                }
+
+                if (
+                    source == OfflineImagerySource.OPENAERIALMAP &&
+                    directOamRequest != null
+                ) {
+                    item {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        ) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(
+                                    "Descarga OAM recomendada",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Text(
+                                    "Esta imagen ya tiene un PMTiles preparado por OpenAerialMap. " +
+                                        "Es la opción más estable para uso sin conexión.",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Button(
+                                    onClick = { onDownload(directOamRequest) },
+                                    enabled = !busy
+                                ) {
+                                    Icon(Icons.Default.DownloadForOffline, null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Descargar imagen completa")
+                                }
+                            }
                         }
                     }
                 }
@@ -554,6 +653,35 @@ fun SatelliteOfflineDialog(
     )
 }
 
+private data class DownloadBox(
+    val west: Double,
+    val south: Double,
+    val east: Double,
+    val north: Double
+)
+
+private fun clipToOamCoverage(
+    west: Double,
+    south: Double,
+    east: Double,
+    north: Double,
+    imagery: OpenAerialMapImagery?
+): DownloadBox? {
+    val item = imagery ?: return null
+    val iw = item.coverageWest ?: return DownloadBox(west, south, east, north)
+    val isouth = item.coverageSouth ?: return DownloadBox(west, south, east, north)
+    val ie = item.coverageEast ?: return DownloadBox(west, south, east, north)
+    val inorth = item.coverageNorth ?: return DownloadBox(west, south, east, north)
+
+    val clippedWest = max(west, iw)
+    val clippedSouth = max(south, isouth)
+    val clippedEast = min(east, ie)
+    val clippedNorth = min(north, inorth)
+
+    if (clippedWest >= clippedEast || clippedSouth >= clippedNorth) return null
+    return DownloadBox(clippedWest, clippedSouth, clippedEast, clippedNorth)
+}
+
 private data class SatelliteBox(
     val west: Double,
     val south: Double,
@@ -616,7 +744,11 @@ private fun sourceFilePrefix(source: OfflineImagerySource): String =
 private fun estimateTiles(request: SatelliteRegionRequest): Int {
     var total = 0L
     val minZoom =
-        if (request.source == OfflineImagerySource.SENTINEL) 0 else 8
+        when (request.source) {
+            OfflineImagerySource.SENTINEL -> 0
+            OfflineImagerySource.INEGI -> 10
+            OfflineImagerySource.OPENAERIALMAP -> 14
+        }
 
     for (z in minZoom..request.maxZoom) {
         val n = 1 shl z

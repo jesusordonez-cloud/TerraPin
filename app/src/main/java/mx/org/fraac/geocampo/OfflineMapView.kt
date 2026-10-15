@@ -702,7 +702,7 @@ private fun openAerialMapStyle(imagery: OpenAerialMapImagery): String {
         "oam": {
           "type": "raster",
           "tiles": ["$tile"],
-          "tileSize": 512,
+          "tileSize": 256,
           "minzoom": 0,
           "maxzoom": 23,
           "attribution": "$attribution"
