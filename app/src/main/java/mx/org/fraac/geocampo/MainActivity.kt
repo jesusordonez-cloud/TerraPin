@@ -3,6 +3,7 @@ package mx.org.fraac.geocampo
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -26,6 +27,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -762,18 +764,41 @@ private fun GeoCampoScreen(vm: MainViewModel) {
 
 @Composable
 private fun ForestMark(modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val logo = remember {
+        runCatching {
+            BitmapFactory.decodeResource(
+                context.resources,
+                R.drawable.terrapin_logo,
+                BitmapFactory.Options().apply {
+                    inSampleSize = 8
+                    inPreferredConfig = Bitmap.Config.RGB_565
+                }
+            )?.asImageBitmap()
+        }.getOrNull()
+    }
+
     Surface(
         modifier = modifier.size(48.dp),
         shape = RoundedCornerShape(14.dp),
         color = Color.White,
         shadowElevation = 2.dp
     ) {
-        Image(
-            painter = painterResource(R.drawable.terrapin_logo),
-            contentDescription = "Logo TerraPin",
-            modifier = Modifier.fillMaxSize().padding(3.dp),
-            contentScale = ContentScale.Fit
-        )
+        if (logo != null) {
+            Image(
+                bitmap = logo,
+                contentDescription = "Logo TerraPin",
+                modifier = Modifier.fillMaxSize().padding(3.dp),
+                contentScale = ContentScale.Fit
+            )
+        } else {
+            Icon(
+                Icons.Default.Place,
+                contentDescription = "TerraPin",
+                modifier = Modifier.padding(8.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }
 
