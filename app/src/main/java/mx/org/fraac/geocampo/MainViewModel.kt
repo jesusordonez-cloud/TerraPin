@@ -109,6 +109,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _satelliteOffline = MutableStateFlow<PmTilesBasemap?>(satelliteManager.load())
     val satelliteOffline = _satelliteOffline.asStateFlow()
 
+    private val _offlineImagerySource =
+        MutableStateFlow<OfflineImagerySource?>(satelliteManager.loadSource())
+    val offlineImagerySource = _offlineImagerySource.asStateFlow()
+
     private val _satelliteDownloadActive = MutableStateFlow(false)
     val satelliteDownloadActive = _satelliteDownloadActive.asStateFlow()
 
@@ -262,7 +266,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _satelliteDownloadProgress.value = 0f
             _satelliteDownloadedBytes.value = 0L
             _satelliteDownloadStatus.value =
-                "Preparando satélite " + request.name + "…"
+                "Preparando " + request.source.label + " para uso offline…"
 
             runCatching {
                 satelliteManager.download(request) { p ->
@@ -275,14 +279,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }.onSuccess { satellite ->
                 _satelliteOffline.value = satellite
+                _offlineImagerySource.value = request.source
                 _satelliteDownloadProgress.value = 1f
                 _satelliteDownloadStatus.value = null
                 _message.value =
-                    "Satélite offline listo. Ya puedes usarlo sin datos ni Wi‑Fi."
+                    request.source.label +
+                    " offline listo. Ya puedes usarlo sin datos ni Wi‑Fi."
             }.onFailure { error ->
                 _satelliteDownloadStatus.value = null
                 _message.value =
-                    "No se pudo descargar el satélite offline: " +
+                    "No se pudo descargar " + request.source.label + " offline: " +
                     (error.message ?: "error desconocido")
             }
 
@@ -298,9 +304,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) { satelliteManager.deleteAll() }
             _satelliteOffline.value = null
+            _offlineImagerySource.value = null
             _satelliteDownloadProgress.value = 0f
             _satelliteDownloadedBytes.value = 0L
-            _message.value = "Capa satelital offline eliminada"
+            _message.value = "Imagen offline eliminada del dispositivo"
         }
     }
 
