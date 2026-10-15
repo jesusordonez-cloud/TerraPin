@@ -1,2 +1,2 @@
 Trigger de compilación para TerraPin 0.5.5
-Segundo intento con Gradle 8.13
+Tercer intento: proceso completo con logo y PMTiles
