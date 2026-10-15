@@ -740,7 +740,11 @@ private fun sourceFilePrefix(source: OfflineImagerySource): String =
 private fun estimateTiles(request: SatelliteRegionRequest): Int {
     var total = 0L
     val minZoom =
-        if (request.source == OfflineImagerySource.SENTINEL) 0 else 8
+        when (request.source) {
+            OfflineImagerySource.SENTINEL -> 0
+            OfflineImagerySource.INEGI -> 10
+            OfflineImagerySource.OPENAERIALMAP -> 14
+        }
 
     for (z in minZoom..request.maxZoom) {
         val n = 1 shl z
