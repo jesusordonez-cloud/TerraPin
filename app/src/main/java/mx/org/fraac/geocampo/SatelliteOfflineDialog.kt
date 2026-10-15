@@ -5,9 +5,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DownloadForOffline
+import androidx.compose.material.icons.filled.Hd
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.OfflinePin
 import androidx.compose.material.icons.filled.SatelliteAlt
+import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -24,6 +26,10 @@ import kotlin.math.tan
 @Composable
 fun SatelliteOfflineDialog(
     satellite: PmTilesBasemap?,
+    activeSource: OfflineImagerySource?,
+    initialSource: OfflineImagerySource,
+    openAerialMapImagery: OpenAerialMapImagery?,
+    visibleViewport: MapViewport?,
     currentFix: TrackPoint?,
     busy: Boolean,
     progress: Float,
@@ -35,36 +41,145 @@ fun SatelliteOfflineDialog(
     onDelete: () -> Unit,
     onUseOffline: () -> Unit
 ) {
-    var maxZoom by remember { mutableIntStateOf(13) }
-    var radiusKm by remember { mutableIntStateOf(10) }
-
-    val campecheRequest = remember(maxZoom) {
-        SatelliteRegionRequest(
-            name = "Campeche_Sentinel2_2025",
-            west = CAMPECHE_WEST,
-            south = CAMPECHE_SOUTH,
-            east = CAMPECHE_EAST,
-            north = CAMPECHE_NORTH,
-            maxZoom = min(maxZoom, 13)
-        )
+    var source by remember(initialSource) { mutableStateOf(initialSource) }
+    var maxZoom by remember(initialSource) {
+        mutableIntStateOf(defaultZoom(initialSource))
+    }
+    var radiusKm by remember(initialSource) {
+        mutableIntStateOf(defaultRadius(initialSource))
     }
 
-    val gpsRequest = remember(currentFix, radiusKm, maxZoom) {
-        currentFix?.let {
-            val box = bboxAround(it.lat, it.lon, radiusKm.toDouble())
-            SatelliteRegionRequest(
-                name = "Satelite_GPS_${radiusKm}km",
-                west = box.west,
-                south = box.south,
-                east = box.east,
-                north = box.north,
-                maxZoom = maxZoom
-            )
+    LaunchedEffect(source) {
+        if (maxZoom !in zoomOptions(source)) {
+            maxZoom = defaultZoom(source)
+        }
+        if (radiusKm !in radiusOptions(source)) {
+            radiusKm = defaultRadius(source)
         }
     }
 
-    val campecheTiles = remember(campecheRequest) { estimateTiles(campecheRequest) }
-    val gpsTiles = remember(gpsRequest) { gpsRequest?.let(::estimateTiles) ?: 0 }
+    val sourceDetail = remember(openAerialMapImagery) {
+        openAerialMapImagery?.let {
+            buildString {
+                append(it.provider ?: it.title)
+                append(" · ")
+                append(it.resolutionLabel)
+                it.date?.take(10)?.let { date ->
+                    append(" · ")
+                    append(date)
+                }
+            }
+        }
+    }
+
+    fun buildRequest(
+        name: String,
+        west: Double,
+        south: Double,
+        east: Double,
+        north: Double
+    ): SatelliteRegionRequest =
+        SatelliteRegionRequest(
+            name = name,
+            west = west,
+            south = south,
+            east = east,
+            north = north,
+            maxZoom = maxZoom,
+            source = source,
+            tileTemplate =
+                if (source == OfflineImagerySource.OPENAERIALMAP) {
+                    openAerialMapImagery?.tileTemplate
+                } else {
+                    null
+                },
+            sourceDetail =
+                if (source == OfflineImagerySource.OPENAERIALMAP) {
+                    sourceDetail
+                } else {
+                    null
+                }
+        )
+
+    val visibleRequest = remember(
+        visibleViewport,
+        source,
+        maxZoom,
+        openAerialMapImagery,
+        sourceDetail
+    ) {
+        visibleViewport?.let { viewport ->
+            if (
+                viewport.west < viewport.east &&
+                viewport.south < viewport.north &&
+                (source != OfflineImagerySource.OPENAERIALMAP ||
+                    openAerialMapImagery != null)
+            ) {
+                buildRequest(
+                    name = sourceFilePrefix(source) + "_Area_visible",
+                    west = viewport.west,
+                    south = viewport.south,
+                    east = viewport.east,
+                    north = viewport.north
+                )
+            } else {
+                null
+            }
+        }
+    }
+
+    val gpsRequest = remember(
+        currentFix,
+        radiusKm,
+        maxZoom,
+        source,
+        openAerialMapImagery,
+        sourceDetail
+    ) {
+        currentFix?.let {
+            val box = bboxAround(it.lat, it.lon, radiusKm.toDouble())
+            if (
+                source != OfflineImagerySource.OPENAERIALMAP ||
+                openAerialMapImagery != null
+            ) {
+                buildRequest(
+                    name = sourceFilePrefix(source) + "_GPS_" + radiusKm + "km",
+                    west = box.west,
+                    south = box.south,
+                    east = box.east,
+                    north = box.north
+                )
+            } else {
+                null
+            }
+        }
+    }
+
+    val campecheRequest = remember(maxZoom, source) {
+        if (source == OfflineImagerySource.SENTINEL) {
+            SatelliteRegionRequest(
+                name = "Campeche_Sentinel2_2025",
+                west = CAMPECHE_WEST,
+                south = CAMPECHE_SOUTH,
+                east = CAMPECHE_EAST,
+                north = CAMPECHE_NORTH,
+                maxZoom = min(maxZoom, 13),
+                source = OfflineImagerySource.SENTINEL
+            )
+        } else {
+            null
+        }
+    }
+
+    val visibleTiles = remember(visibleRequest) {
+        visibleRequest?.let(::estimateTiles) ?: 0
+    }
+    val gpsTiles = remember(gpsRequest) {
+        gpsRequest?.let(::estimateTiles) ?: 0
+    }
+    val campecheTiles = remember(campecheRequest) {
+        campecheRequest?.let(::estimateTiles) ?: 0
+    }
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
@@ -73,19 +188,19 @@ fun SatelliteOfflineDialog(
                 Text("Cerrar")
             }
         },
-        title = { Text("Satélite offline") },
+        title = { Text("Imágenes para uso offline") },
         text = {
             LazyColumn(
-                modifier = Modifier.heightIn(max = 620.dp),
+                modifier = Modifier.heightIn(max = 650.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item {
                     Text(
-                        "Descarga Sentinel-2 Cloudless 2025 para usarlo después sin datos ni Wi‑Fi.",
+                        "Descarga la imagen del proveedor que necesites y úsala después sin datos ni Wi‑Fi.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        SatelliteOfflineManager.ATTRIBUTION,
+                        "La nueva descarga sustituye a la imagen offline anterior para ahorrar almacenamiento.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -101,15 +216,15 @@ fun SatelliteOfflineDialog(
                                 ) {
                                     Column(Modifier.weight(1f)) {
                                         Text(
-                                            "Satélite descargado",
+                                            "Imagen offline disponible",
                                             style = MaterialTheme.typography.titleMedium
                                         )
                                         Text(
-                                            satellite.name,
+                                            activeSource?.label ?: satellite.name,
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                         Text(
-                                            "Zoom 0–${satellite.maxZoom}",
+                                            "Zoom " + satellite.minZoom + "–" + satellite.maxZoom,
                                             style = MaterialTheme.typography.labelSmall
                                         )
                                     }
@@ -126,9 +241,9 @@ fun SatelliteOfflineDialog(
                                     onClick = onUseOffline,
                                     enabled = !busy
                                 ) {
-                                    Icon(Icons.Default.SatelliteAlt, null)
+                                    Icon(Icons.Default.OfflinePin, null)
                                     Spacer(Modifier.width(6.dp))
-                                    Text("Usar satélite offline")
+                                    Text("Usar imagen offline")
                                 }
 
                                 TextButton(
@@ -162,7 +277,7 @@ fun SatelliteOfflineDialog(
                                 )
                                 Spacer(Modifier.height(8.dp))
                                 Text(
-                                    status ?: "Descargando imagen satelital…",
+                                    status ?: "Descargando imagen…",
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                                 Text(
@@ -170,7 +285,7 @@ fun SatelliteOfflineDialog(
                                     style = MaterialTheme.typography.labelSmall
                                 )
                                 Text(
-                                    "Mantén GeoCampo abierto hasta terminar.",
+                                    "Mantén TerraPin abierto hasta terminar.",
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
@@ -180,24 +295,97 @@ fun SatelliteOfflineDialog(
 
                 item {
                     Text(
+                        "Proveedor",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+
+                    FilterChip(
+                        selected = source == OfflineImagerySource.SENTINEL,
+                        onClick = {
+                            source = OfflineImagerySource.SENTINEL
+                            maxZoom = 13
+                            radiusKm = 10
+                        },
+                        enabled = !busy,
+                        leadingIcon = { Icon(Icons.Default.SatelliteAlt, null) },
+                        label = { Text("Sentinel‑2 · cobertura global") }
+                    )
+
+                    FilterChip(
+                        selected = source == OfflineImagerySource.INEGI,
+                        onClick = {
+                            source = OfflineImagerySource.INEGI
+                            maxZoom = 16
+                            radiusKm = 5
+                        },
+                        enabled = !busy,
+                        leadingIcon = { Icon(Icons.Default.Hd, null) },
+                        label = { Text("INEGI Ortofoto HD · México") }
+                    )
+
+                    FilterChip(
+                        selected = source == OfflineImagerySource.OPENAERIALMAP,
+                        onClick = {
+                            source = OfflineImagerySource.OPENAERIALMAP
+                            maxZoom = 16
+                            radiusKm = 2
+                        },
+                        enabled = !busy && openAerialMapImagery != null,
+                        leadingIcon = { Icon(Icons.Default.TravelExplore, null) },
+                        label = {
+                            Text(
+                                if (openAerialMapImagery != null) {
+                                    "OpenAerialMap · cobertura detectada"
+                                } else {
+                                    "OpenAerialMap · sin cobertura detectada"
+                                }
+                            )
+                        }
+                    )
+
+                    if (
+                        source == OfflineImagerySource.OPENAERIALMAP &&
+                        openAerialMapImagery != null
+                    ) {
+                        Text(
+                            openAerialMapImagery.resolutionLabel +
+                                (openAerialMapImagery.provider?.let {
+                                    " · " + it
+                                } ?: ""),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                item {
+                    Text(
                         "Nivel de detalle",
                         style = MaterialTheme.typography.titleSmall
                     )
                     Text(
-                        "Z13 es adecuado para todo Campeche. Z14 ofrece más detalle y se recomienda para áreas pequeñas.",
+                        when (source) {
+                            OfflineImagerySource.SENTINEL ->
+                                "Z13 es equilibrado. Z14 ofrece el máximo detalle útil de Sentinel‑2."
+                            OfflineImagerySource.INEGI ->
+                                "Z16 es recomendado. Z17 ofrece más detalle, pero aumenta considerablemente la descarga."
+                            OfflineImagerySource.OPENAERIALMAP ->
+                                "Z16 es recomendado para imagen aérea. Z17 úsalo en áreas pequeñas."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        listOf(12, 13, 14).forEach { zoom ->
+                        zoomOptions(source).forEach { zoom ->
                             FilterChip(
                                 selected = maxZoom == zoom,
                                 onClick = { maxZoom = zoom },
                                 enabled = !busy,
-                                label = { Text("Z$zoom") }
+                                label = { Text("Z" + zoom) }
                             )
                         }
                     }
@@ -206,25 +394,42 @@ fun SatelliteOfflineDialog(
                 item {
                     HorizontalDivider()
                     Text(
-                        "Campeche completo",
+                        "Área visible en pantalla",
                         style = MaterialTheme.typography.titleSmall
                     )
                     Text(
-                        if (maxZoom > 13) {
-                            "Para todo Campeche se limitará automáticamente a Z13."
-                        } else {
-                            "Descarga aproximada: ${formatCount(campecheTiles)} teselas."
-                        },
+                        "Recomendado: descarga exactamente la zona que estás viendo en el mapa.",
                         style = MaterialTheme.typography.bodySmall
                     )
-                    Spacer(Modifier.height(6.dp))
-                    Button(
-                        onClick = { onDownload(campecheRequest) },
-                        enabled = !busy
-                    ) {
-                        Icon(Icons.Default.DownloadForOffline, null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Descargar Campeche satelital")
+
+                    if (visibleRequest == null) {
+                        Text(
+                            "Mueve el mapa hasta la zona que necesitas y vuelve a abrir esta opción.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            "Estimado: " + formatCount(visibleTiles) + " teselas",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Button(
+                            onClick = { onDownload(visibleRequest) },
+                            enabled = !busy && visibleTiles in 1..MAX_RECOMMENDED_TILES
+                        ) {
+                            Icon(Icons.Default.DownloadForOffline, null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Descargar área visible")
+                        }
+
+                        if (visibleTiles > MAX_RECOMMENDED_TILES) {
+                            Text(
+                                "Esta vista es demasiado grande para ese nivel de detalle. Acerca el mapa o baja el zoom de descarga.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
 
@@ -235,19 +440,20 @@ fun SatelliteOfflineDialog(
                         style = MaterialTheme.typography.titleSmall
                     )
                     Text(
-                        "La mejor opción para trabajo en ejidos: descargas menos datos y puedes usar Z14.",
+                        "Útil para preparar trabajo de campo alrededor del GPS.",
                         style = MaterialTheme.typography.bodySmall
                     )
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        listOf(5, 10, 25, 50).forEach { km ->
+                        radiusOptions(source).forEach { km ->
                             FilterChip(
                                 selected = radiusKm == km,
                                 onClick = { radiusKm = km },
                                 enabled = !busy,
-                                label = { Text("${km} km") }
+                                label = { Text(km.toString() + " km") }
                             )
                         }
                     }
@@ -263,7 +469,7 @@ fun SatelliteOfflineDialog(
                             Spacer(Modifier.width(6.dp))
                             Text("Obtener mi ubicación")
                         }
-                    } else {
+                    } else if (gpsRequest != null) {
                         Text(
                             String.format(
                                 Locale.US,
@@ -274,19 +480,55 @@ fun SatelliteOfflineDialog(
                             style = MaterialTheme.typography.labelMedium
                         )
                         Text(
-                            "Estimado: ${formatCount(gpsTiles)} teselas",
+                            "Estimado: " + formatCount(gpsTiles) + " teselas",
                             style = MaterialTheme.typography.labelSmall
                         )
                         Spacer(Modifier.height(6.dp))
                         Button(
-                            onClick = {
-                                gpsRequest?.let(onDownload)
-                            },
-                            enabled = gpsRequest != null && !busy
+                            onClick = { onDownload(gpsRequest) },
+                            enabled = !busy && gpsTiles in 1..MAX_RECOMMENDED_TILES
                         ) {
                             Icon(Icons.Default.DownloadForOffline, null)
                             Spacer(Modifier.width(6.dp))
-                            Text("Descargar zona satelital")
+                            Text("Descargar zona alrededor del GPS")
+                        }
+
+                        if (gpsTiles > MAX_RECOMMENDED_TILES) {
+                            Text(
+                                "Reduce el radio o el nivel de detalle para evitar una descarga excesiva.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+
+                if (
+                    source == OfflineImagerySource.SENTINEL &&
+                    campecheRequest != null
+                ) {
+                    item {
+                        HorizontalDivider()
+                        Text(
+                            "Campeche completo",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Text(
+                            "Disponible únicamente con Sentinel‑2 para mantener un tamaño razonable.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            "Estimado: " + formatCount(campecheTiles) + " teselas",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Button(
+                            onClick = { onDownload(campecheRequest) },
+                            enabled = !busy
+                        ) {
+                            Icon(Icons.Default.DownloadForOffline, null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Descargar Campeche")
                         }
                     }
                 }
@@ -294,15 +536,15 @@ fun SatelliteOfflineDialog(
                 item {
                     HorizontalDivider()
                     Text(
-                        "Uso de datos y almacenamiento",
+                        "Cómo funciona",
                         style = MaterialTheme.typography.titleSmall
                     )
                     Text(
-                        "La descarga se realiza una sola vez con internet. GeoCampo empaqueta las teselas JPG en un PMTiles raster local. Después puedes activar “Satélite offline” sin conexión.",
+                        "TerraPin descarga las teselas del proveedor y las empaqueta en un PMTiles raster local. Después la imagen se abre desde el almacenamiento del teléfono, por lo que ya no depende de que INEGI u OpenAerialMap respondan en ese momento.",
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
-                        "La cantidad final de MB depende del área y del nivel de zoom.",
+                        "La cantidad final de MB depende del área, la cobertura y el nivel de zoom.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -319,7 +561,11 @@ private data class SatelliteBox(
     val north: Double
 )
 
-private fun bboxAround(lat: Double, lon: Double, radiusKm: Double): SatelliteBox {
+private fun bboxAround(
+    lat: Double,
+    lon: Double,
+    radiusKm: Double
+): SatelliteBox {
     val latDelta = radiusKm / 111.32
     val lonFactor = 111.32 * cos(Math.toRadians(lat)).coerceAtLeast(0.2)
     val lonDelta = radiusKm / lonFactor
@@ -332,9 +578,47 @@ private fun bboxAround(lat: Double, lon: Double, radiusKm: Double): SatelliteBox
     )
 }
 
+private fun zoomOptions(source: OfflineImagerySource): List<Int> =
+    when (source) {
+        OfflineImagerySource.SENTINEL -> listOf(12, 13, 14)
+        OfflineImagerySource.INEGI,
+        OfflineImagerySource.OPENAERIALMAP -> listOf(14, 16, 17)
+    }
+
+private fun radiusOptions(source: OfflineImagerySource): List<Int> =
+    when (source) {
+        OfflineImagerySource.SENTINEL -> listOf(5, 10, 25, 50)
+        OfflineImagerySource.INEGI -> listOf(1, 2, 5, 10)
+        OfflineImagerySource.OPENAERIALMAP -> listOf(1, 2, 5, 10)
+    }
+
+private fun defaultZoom(source: OfflineImagerySource): Int =
+    when (source) {
+        OfflineImagerySource.SENTINEL -> 13
+        OfflineImagerySource.INEGI,
+        OfflineImagerySource.OPENAERIALMAP -> 16
+    }
+
+private fun defaultRadius(source: OfflineImagerySource): Int =
+    when (source) {
+        OfflineImagerySource.SENTINEL -> 10
+        OfflineImagerySource.INEGI -> 5
+        OfflineImagerySource.OPENAERIALMAP -> 2
+    }
+
+private fun sourceFilePrefix(source: OfflineImagerySource): String =
+    when (source) {
+        OfflineImagerySource.SENTINEL -> "Sentinel2"
+        OfflineImagerySource.INEGI -> "INEGI_Ortofoto"
+        OfflineImagerySource.OPENAERIALMAP -> "OpenAerialMap"
+    }
+
 private fun estimateTiles(request: SatelliteRegionRequest): Int {
     var total = 0L
-    for (z in 0..request.maxZoom) {
+    val minZoom =
+        if (request.source == OfflineImagerySource.SENTINEL) 0 else 8
+
+    for (z in minZoom..request.maxZoom) {
         val n = 1 shl z
         fun x(lon: Double): Int =
             floor((lon + 180.0) / 360.0 * n)
@@ -373,6 +657,7 @@ private fun formatBytes(bytes: Long): String {
     }
 }
 
+private const val MAX_RECOMMENDED_TILES = 9_000
 private const val CAMPECHE_WEST = -92.46879
 private const val CAMPECHE_SOUTH = 17.812871
 private const val CAMPECHE_EAST = -89.121229

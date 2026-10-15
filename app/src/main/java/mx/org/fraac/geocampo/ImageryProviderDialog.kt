@@ -3,6 +3,7 @@ package mx.org.fraac.geocampo
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.Hd
 import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.TravelExplore
@@ -18,7 +19,10 @@ fun ImageryProviderDialog(
     onDismiss: () -> Unit,
     onUseSentinel: () -> Unit,
     onUseInegi: () -> Unit,
-    onUseOpenAerialMap: () -> Unit
+    onUseOpenAerialMap: () -> Unit,
+    onDownloadSentinel: () -> Unit,
+    onDownloadInegi: () -> Unit,
+    onDownloadOpenAerialMap: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -28,7 +32,7 @@ fun ImageryProviderDialog(
         title = { Text("Proveedor de imagen") },
         text = {
             Column(
-                modifier = Modifier.heightIn(max = 620.dp),
+                modifier = Modifier.heightIn(max = 650.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (openAerialMapImagery != null) {
@@ -52,23 +56,67 @@ fun ImageryProviderDialog(
                                     )
                                     Text(
                                         openAerialMapImagery.resolutionLabel +
-                                            (openAerialMapImagery.date?.let { " · " + it.take(10) } ?: ""),
+                                            (openAerialMapImagery.date?.let {
+                                                " · " + it.take(10)
+                                            } ?: ""),
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
                             }
+
                             Spacer(Modifier.height(8.dp))
-                            Button(onClick = onUseOpenAerialMap) {
-                                Icon(Icons.Default.Hd, null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("Usar imagen aérea")
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = onUseOpenAerialMap,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Hd, null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Usar")
+                                }
+
+                                OutlinedButton(
+                                    onClick = onDownloadOpenAerialMap,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.DownloadForOffline, null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Descargar")
+                                }
                             }
+
                             openAerialMapImagery.provider?.let {
                                 Text(
-                                    "Proveedor: $it",
+                                    "Proveedor: " + it,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                            }
+                        }
+                    }
+                } else {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Default.TravelExplore, null)
+                                Column {
+                                    Text(
+                                        "OpenAerialMap",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        "No se detectó una imagen aérea abierta en la zona visible. Acerca el mapa o muévete a otra zona para volver a buscar.",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
                             }
                         }
                     }
@@ -93,20 +141,40 @@ fun ImageryProviderDialog(
                                     style = MaterialTheme.typography.titleSmall
                                 )
                                 Text(
-                                    "Fuente oficial y gratuita para México. En las zonas con cobertura ofrece ortofotos de mayor detalle que Sentinel‑2.",
+                                    "Fuente oficial y gratuita para México. En zonas con cobertura ofrece ortofotos de mayor detalle que Sentinel‑2.",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
                         }
+
                         Spacer(Modifier.height(8.dp))
-                        Button(onClick = onUseInegi) {
-                            Icon(Icons.Default.Hd, null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Usar INEGI HD")
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = onUseInegi,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Hd, null)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Usar")
+                            }
+
+                            OutlinedButton(
+                                onClick = onDownloadInegi,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.DownloadForOffline, null)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Descargar")
+                            }
                         }
+
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "No requiere API key. Requiere internet y la cobertura/fecha de la ortofoto varía por zona.",
+                            "No requiere API key. La cobertura y la fecha de la ortofoto varían por zona. La descarga offline evita depender del servicio durante el trabajo de campo.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -132,22 +200,41 @@ fun ImageryProviderDialog(
                                     style = MaterialTheme.typography.titleSmall
                                 )
                                 Text(
-                                    "Cobertura global abierta. Menor resolución, pero estable y disponible también para descarga offline.",
+                                    "Cobertura global abierta. Menor resolución, pero estable y adecuada para áreas grandes.",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
                         }
+
                         Spacer(Modifier.height(8.dp))
-                        FilledTonalButton(onClick = onUseSentinel) {
-                            Icon(Icons.Default.Cloud, null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Usar Sentinel‑2")
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilledTonalButton(
+                                onClick = onUseSentinel,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Cloud, null)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Usar")
+                            }
+
+                            OutlinedButton(
+                                onClick = onDownloadSentinel,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.DownloadForOffline, null)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Descargar")
+                            }
                         }
                     }
                 }
 
                 Text(
-                    "TerraPin mantiene el mapa vectorial PMTiles para calles, caminos y límites sobre las imágenes.",
+                    "Para campo, descarga la zona antes de salir. TerraPin guarda la imagen como PMTiles raster local y mantiene encima caminos, límites, puntos y recorridos.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
