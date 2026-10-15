@@ -628,8 +628,8 @@ private fun updateInegiOrtho(
         west >= east || south >= north
     ) return
 
-    val width = mapView.width.coerceIn(512, 1600)
-    val height = mapView.height.coerceIn(512, 1600)
+    val width = mapView.width.coerceIn(512, 1024)
+    val height = mapView.height.coerceIn(512, 1024)
 
     val bbox = String.format(
         Locale.US,
