@@ -180,24 +180,28 @@ fun SatelliteOfflineDialog(
         if (
             source == OfflineImagerySource.OPENAERIALMAP &&
             imagery != null &&
-            !url.isNullOrBlank() &&
-            imagery.coverageWest != null &&
-            imagery.coverageSouth != null &&
-            imagery.coverageEast != null &&
-            imagery.coverageNorth != null
+            !url.isNullOrBlank()
         ) {
-            SatelliteRegionRequest(
-                name = "OpenAerialMap_Imagen_completa",
-                west = imagery.coverageWest,
-                south = imagery.coverageSouth,
-                east = imagery.coverageEast,
-                north = imagery.coverageNorth,
-                maxZoom = maxZoom,
-                source = OfflineImagerySource.OPENAERIALMAP,
-                tileTemplate = imagery.tileTemplate,
-                sourceDetail = sourceDetail,
-                directPmtilesUrl = url
-            )
+            val west = imagery.coverageWest
+            val south = imagery.coverageSouth
+            val east = imagery.coverageEast
+            val north = imagery.coverageNorth
+            if (west != null && south != null && east != null && north != null) {
+                SatelliteRegionRequest(
+                    name = "OpenAerialMap_Imagen_completa",
+                    west = west,
+                    south = south,
+                    east = east,
+                    north = north,
+                    maxZoom = maxZoom,
+                    source = OfflineImagerySource.OPENAERIALMAP,
+                    tileTemplate = imagery.tileTemplate,
+                    sourceDetail = sourceDetail,
+                    directPmtilesUrl = url
+                )
+            } else {
+                null
+            }
         } else {
             null
         }
