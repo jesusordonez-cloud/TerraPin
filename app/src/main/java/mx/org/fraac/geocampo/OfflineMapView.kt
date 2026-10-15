@@ -246,10 +246,12 @@ fun OfflineMapView(
             onDispose { }
         } else {
             val listener = MapLibreMap.OnCameraIdleListener {
-                updateInegiOrtho(targetMap, mapView)
+                runCatching { updateInegiOrtho(targetMap, mapView) }
             }
             targetMap.addOnCameraIdleListener(listener)
-            updateInegiOrtho(targetMap, mapView)
+            mapView.post {
+                runCatching { updateInegiOrtho(targetMap, mapView) }
+            }
 
             onDispose {
                 targetMap.removeOnCameraIdleListener(listener)
@@ -263,29 +265,30 @@ fun OfflineMapView(
             onDispose { }
         } else {
             val listener = MapLibreMap.OnCameraIdleListener {
-                val bounds = targetMap.projection.visibleRegion.latLngBounds
-                if (
-                    bounds.longitudeWest.isFinite() &&
-                    bounds.longitudeEast.isFinite() &&
-                    bounds.latitudeSouth.isFinite() &&
-                    bounds.latitudeNorth.isFinite() &&
-                    bounds.longitudeWest < bounds.longitudeEast &&
-                    bounds.latitudeSouth < bounds.latitudeNorth
-                ) {
-                    viewportCallback(
-                        MapViewport(
-                            west = bounds.longitudeWest,
-                            south = bounds.latitudeSouth,
-                            east = bounds.longitudeEast,
-                            north = bounds.latitudeNorth,
-                            zoom = targetMap.cameraPosition.zoom
+                runCatching {
+                    val bounds = targetMap.projection.visibleRegion.latLngBounds
+                    if (
+                        bounds.longitudeWest.isFinite() &&
+                        bounds.longitudeEast.isFinite() &&
+                        bounds.latitudeSouth.isFinite() &&
+                        bounds.latitudeNorth.isFinite() &&
+                        bounds.longitudeWest < bounds.longitudeEast &&
+                        bounds.latitudeSouth < bounds.latitudeNorth
+                    ) {
+                        viewportCallback(
+                            MapViewport(
+                                west = bounds.longitudeWest,
+                                south = bounds.latitudeSouth,
+                                east = bounds.longitudeEast,
+                                north = bounds.latitudeNorth,
+                                zoom = targetMap.cameraPosition.zoom
+                            )
                         )
-                    )
+                    }
                 }
             }
 
             targetMap.addOnCameraIdleListener(listener)
-            listener.onCameraIdle()
 
             onDispose {
                 targetMap.removeOnCameraIdleListener(listener)
