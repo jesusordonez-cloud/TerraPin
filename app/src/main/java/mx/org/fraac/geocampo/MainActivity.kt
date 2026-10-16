@@ -71,6 +71,8 @@ private fun GeoCampoScreen(vm: MainViewModel) {
     val satelliteDownloadedBytes by vm.satelliteDownloadedBytes.collectAsState()
     val openAerialMapImagery by vm.openAerialMapImagery.collectAsState()
     val openAerialMapSearching by vm.openAerialMapSearching.collectAsState()
+    val fieldRoute by vm.fieldRoute.collectAsState()
+    val routeCalculating by vm.routeCalculating.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showProjectDialog by remember { mutableStateOf(false) }
@@ -82,6 +84,7 @@ private fun GeoCampoScreen(vm: MainViewModel) {
     var showExportDialog by remember { mutableStateOf(false) }
     var showPrintDialog by remember { mutableStateOf(false) }
     var selectedWaypoint by remember { mutableStateOf<Waypoint?>(null) }
+    var selectingRouteDestination by remember { mutableStateOf(false) }
 
     var baseMapMode by remember { mutableStateOf(BaseMapMode.MAP) }
     var activeOpenAerialMap by remember { mutableStateOf<OpenAerialMapImagery?>(null) }
@@ -388,9 +391,16 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                             openAerialMapImagery
                         },
                     baseMapMode = baseMapMode,
+                    fieldRoute = fieldRoute,
                     centerOnLocationToken = centerOnLocationToken,
                     snapshotBridge = snapshotBridge,
                     modifier = Modifier.fillMaxSize(),
+                    onMapClick = { coord ->
+                        if (selectingRouteDestination) {
+                            selectingRouteDestination = false
+                            vm.calculateFieldRoute(coord)
+                        }
+                    },
                     onLongPress = { coord ->
                         pendingPhotoPaths.forEach(vm::discardEvidence)
                         pendingPhotoPaths.clear()
@@ -600,9 +610,34 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                             }
                         )
                     }
+
+                    SmallFloatingActionButton(
+                        onClick = {
+                            if (routeCalculating) return@SmallFloatingActionButton
+                            selectingRouteDestination = true
+                            vm.notifyUser("Toca en el mapa el punto al que quieres llegar.")
+                        },
+                        containerColor =
+                            if (selectingRouteDestination || fieldRoute != null) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surface
+                            }
+                    ) {
+                        Icon(
+                            Icons.Default.Directions,
+                            contentDescription = "Calcular ruta a un punto",
+                            tint =
+                                if (selectingRouteDestination || fieldRoute != null) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                }
+                        )
+                    }
                 }
 
-                if (baseMapMode != BaseMapMode.MAP) {
+                if (baseMapMode != BaseMapMode.MAP && baseMapMode != BaseMapMode.NONE) {
                     Surface(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
@@ -633,11 +668,57 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                                             ?: openAerialMapImagery?.resolutionLabel
                                             ?: "imagen aérea HD")
                                 BaseMapMode.MAP -> ""
+                                BaseMapMode.NONE -> ""
                             },
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
+
+                fieldRoute?.let { route ->
+                    ElevatedCard(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
+                            .widthIn(max = 520.dp),
+                        colors = CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                if (route.usesRoadNetwork) Icons.Default.AltRoute
+                                else Icons.Default.NearMe,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    if (route.usesRoadNetwork) "Ruta por caminos"
+                                    else "Dirección directa",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Text(
+                                    formatDistance(route.distanceMeters) +
+                                        if (route.usesRoadNetwork && route.sourceLayerNames.isNotEmpty()) {
+                                            " · " + route.sourceLayerNames.take(2).joinToString()
+                                        } else {
+                                            ""
+                                        },
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(onClick = vm::clearFieldRoute) {
+                                Icon(Icons.Default.Close, contentDescription = "Cerrar ruta")
+                            }
+                        }
                     }
                 }
             }
@@ -755,7 +836,8 @@ private fun GeoCampoScreen(vm: MainViewModel) {
             onDelete = {
                 vm.deleteSatelliteOffline()
                 if (baseMapMode == BaseMapMode.SATELLITE_OFFLINE) {
-                    baseMapMode = BaseMapMode.MAP
+                    baseMapMode =
+                        if (basemap != null) BaseMapMode.MAP else BaseMapMode.NONE
                 }
             },
             onUseOffline = {
@@ -773,12 +855,100 @@ private fun GeoCampoScreen(vm: MainViewModel) {
             confirmButton = {
                 TextButton(onClick = { showLayersDialog = false }) { Text("Cerrar") }
             },
-            title = { Text("Capas") },
+            title = { Text("Capas y mapas") },
             text = {
-                if (layers.isEmpty()) {
-                    Text("Aún no hay capas importadas.")
-                } else {
-                    LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 520.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (basemap != null || satelliteOffline != null) {
+                        item {
+                            Text(
+                                "Mapas descargados",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+
+                        basemap?.let { base ->
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = baseMapMode == BaseMapMode.MAP,
+                                        onCheckedChange = { checked ->
+                                            baseMapMode =
+                                                if (checked) BaseMapMode.MAP
+                                                else BaseMapMode.NONE
+                                        }
+                                    )
+                                    Column(Modifier.weight(1f)) {
+                                        Text(base.name)
+                                        Text(
+                                            "PMTiles " +
+                                                (if (base.isRaster) "raster" else "vectorial") +
+                                                " · zoom " + base.minZoom + "–" + base.maxZoom,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        satelliteOffline?.let { image ->
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = baseMapMode == BaseMapMode.SATELLITE_OFFLINE,
+                                        onCheckedChange = { checked ->
+                                            baseMapMode =
+                                                if (checked) BaseMapMode.SATELLITE_OFFLINE
+                                                else BaseMapMode.NONE
+                                        }
+                                    )
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            offlineImagerySource?.label ?: image.name
+                                        )
+                                        Text(
+                                            "Imagen offline · zoom " +
+                                                image.minZoom + "–" + image.maxZoom,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        item { HorizontalDivider(Modifier.padding(vertical = 6.dp)) }
+                    }
+
+                    item {
+                        Text(
+                            "Capas vectoriales",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                    }
+
+                    if (layers.isEmpty()) {
+                        item {
+                            Text(
+                                "Aún no hay SHP, KML, GPX o GeoJSON importados.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
                         items(layers, key = { it.id }) { layer ->
                             Row(
                                 modifier = Modifier
@@ -930,6 +1100,7 @@ private fun mapModeLabel(
     offlineSource: OfflineImagerySource?
 ): String =
     when (mode) {
+        BaseMapMode.NONE -> "Sin mapa base"
         BaseMapMode.MAP -> "Mapa de campo"
         BaseMapMode.SATELLITE_ONLINE -> "Sentinel · online"
         BaseMapMode.INEGI_ORTHO -> "INEGI · online"
