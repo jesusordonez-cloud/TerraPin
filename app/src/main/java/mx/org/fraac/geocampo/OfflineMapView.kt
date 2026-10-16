@@ -39,6 +39,7 @@ import org.maplibre.android.style.sources.RasterSource
 import org.maplibre.android.style.sources.VectorSource
 
 enum class BaseMapMode {
+    NONE,
     MAP,
     SATELLITE_ONLINE,
     SATELLITE_OFFLINE,
@@ -66,15 +67,18 @@ fun OfflineMapView(
     satelliteOffline: PmTilesBasemap?,
     openAerialMapImagery: OpenAerialMapImagery?,
     baseMapMode: BaseMapMode,
+    fieldRoute: FieldRoutePlan?,
     centerOnLocationToken: Int,
     snapshotBridge: MapSnapshotBridge,
     modifier: Modifier = Modifier,
+    onMapClick: (GeoCoord) -> Unit,
     onLongPress: (GeoCoord) -> Unit,
     onWaypointSelected: (Waypoint) -> Unit,
     onViewportChanged: (MapViewport) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val mapClickCallback by rememberUpdatedState(onMapClick)
     val longPressCallback by rememberUpdatedState(onLongPress)
     val waypointCallback by rememberUpdatedState(onWaypointSelected)
     val viewportCallback by rememberUpdatedState(onViewportChanged)
@@ -114,6 +118,14 @@ fun OfflineMapView(
                 isAttributionEnabled = true
                 isLogoEnabled = true
             }
+            readyMap.addOnMapClickListener(
+                object : MapLibreMap.OnMapClickListener {
+                    override fun onMapClick(point: LatLng): Boolean {
+                        mapClickCallback(GeoCoord(point.latitude, point.longitude))
+                        return false
+                    }
+                }
+            )
             readyMap.addOnMapLongClickListener(
                 object : MapLibreMap.OnMapLongClickListener {
                     override fun onMapLongClick(point: LatLng): Boolean {
@@ -162,6 +174,7 @@ fun OfflineMapView(
 
         targetMap.setStyle(Style.Builder().fromJson(styleJson)) { style ->
             val activeBase = when (baseMapMode) {
+                BaseMapMode.NONE -> null
                 BaseMapMode.MAP -> basemap
                 BaseMapMode.SATELLITE_OFFLINE -> satelliteOffline
                 BaseMapMode.SATELLITE_ONLINE,
@@ -200,7 +213,8 @@ fun OfflineMapView(
         layers,
         waypoints,
         trackPoints,
-        currentFix
+        currentFix,
+        fieldRoute
     ) {
         val targetMap = map ?: return@LaunchedEffect
         if (styleEpoch == 0) return@LaunchedEffect
@@ -211,6 +225,7 @@ fun OfflineMapView(
             waypoints = waypoints,
             trackPoints = trackPoints,
             currentFix = currentFix,
+            fieldRoute = fieldRoute,
             markerWaypoints = markerWaypoints
         )
 
@@ -226,7 +241,7 @@ fun OfflineMapView(
         }
     }
 
-    LaunchedEffect(map, centerOnLocationToken, currentFix) {
+    LaunchedEffect(map, centerOnLocationToken) {
         if (centerOnLocationToken <= 0) return@LaunchedEffect
         val targetMap = map ?: return@LaunchedEffect
         val fix = currentFix ?: return@LaunchedEffect
@@ -428,6 +443,7 @@ private fun renderAnnotations(
     waypoints: List<Waypoint>,
     trackPoints: List<TrackPoint>,
     currentFix: TrackPoint?,
+    fieldRoute: FieldRoutePlan?,
     markerWaypoints: MutableMap<Long, Waypoint>
 ) {
     map.removeAnnotations()
@@ -517,6 +533,33 @@ private fun renderAnnotations(
                 .add(*points.toTypedArray())
                 .color(Color.rgb(13, 121, 245))
                 .width(6f)
+        )
+    }
+
+    fieldRoute?.let { route ->
+        if (route.points.size >= 2) {
+            map.addPolyline(
+                PolylineOptions()
+                    .add(*route.points.map { LatLng(it.lat, it.lon) }.toTypedArray())
+                    .color(
+                        if (route.usesRoadNetwork) {
+                            Color.rgb(20, 122, 84)
+                        } else {
+                            Color.rgb(220, 126, 38)
+                        }
+                    )
+                    .width(7f)
+            )
+        }
+        map.addMarker(
+            MarkerOptions()
+                .position(LatLng(route.destination.lat, route.destination.lon))
+                .title("Destino")
+                .snippet(
+                    if (route.usesRoadNetwork) "Ruta por caminos"
+                    else "Dirección directa"
+                )
+                .icon(createLetterIcon(context, "D", Color.rgb(197, 63, 51)))
         )
     }
 
