@@ -95,6 +95,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _navigationTarget = MutableStateFlow<Waypoint?>(null)
     val navigationTarget = _navigationTarget.asStateFlow()
 
+    private val _fieldRoute = MutableStateFlow<FieldRoutePlan?>(null)
+    val fieldRoute = _fieldRoute.asStateFlow()
+
+    private val _routeCalculating = MutableStateFlow(false)
+    val routeCalculating = _routeCalculating.asStateFlow()
+
     val trackingState = TrackingBus.state
 
     private val _message = MutableStateFlow<String?>(null)
@@ -379,6 +385,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _selectedTrackId.value = null
         _trackPoints.value = emptyList()
         _navigationTarget.value = null
+        _fieldRoute.value = null
         refreshProjectData()
     }
 
@@ -652,6 +659,51 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setNavigationTarget(waypoint: Waypoint?) {
         _navigationTarget.value = waypoint
+    }
+
+    fun calculateFieldRoute(destination: GeoCoord) {
+        val fix = _currentFix.value
+        if (fix == null) {
+            _message.value = "Aún no hay una posición GPS disponible para iniciar la ruta."
+            return
+        }
+        if (_routeCalculating.value) return
+
+        viewModelScope.launch {
+            _routeCalculating.value = true
+            val start = GeoCoord(fix.lat, fix.lon, fix.altitude)
+            val visibleLayers = _layers.value.filter { it.visible }
+
+            runCatching {
+                withContext(Dispatchers.Default) {
+                    FieldRoutePlanner.plan(start, destination, visibleLayers)
+                }
+            }.onSuccess { route ->
+                _fieldRoute.value = route
+                _message.value =
+                    if (route.usesRoadNetwork) {
+                        "Ruta calculada sobre caminos cargados."
+                    } else {
+                        "No se encontró una red de caminos conectada; se muestra dirección directa al destino."
+                    }
+            }.onFailure {
+                _fieldRoute.value = FieldRoutePlan(
+                    destination = destination,
+                    points = listOf(start, destination),
+                    distanceMeters = GeoMath.distanceMeters(start, destination),
+                    usesRoadNetwork = false,
+                    sourceLayerNames = emptyList()
+                )
+                _message.value =
+                    "No fue posible calcular una ruta por caminos; se muestra dirección directa."
+            }
+
+            _routeCalculating.value = false
+        }
+    }
+
+    fun clearFieldRoute() {
+        _fieldRoute.value = null
     }
 
     fun exportProject(uri: Uri, format: ExportFormat) {
