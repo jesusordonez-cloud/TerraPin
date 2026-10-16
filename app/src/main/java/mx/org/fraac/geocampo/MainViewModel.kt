@@ -321,6 +321,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setLayerVisible(id: String, visible: Boolean) {
         _layers.value = _layers.value.map { if (it.id == id) it.copy(visible = visible) else it }
+        _fieldRoute.value = null
     }
 
     fun deleteLayer(layer: MapLayer) {
