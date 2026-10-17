@@ -1,49 +1,29 @@
-# TerraPin
+# TerraPin 2.0 — rama de prueba Capacitor
 
-Aplicación Android GIS de campo desarrollada por **Reynaldo Ordoñez**, orientada a trabajo forestal, georreferenciación, evidencias fotográficas y operación offline.
+Esta rama mantiene **TerraPin 2.0 (PWA + Capacitor)** separada de la aplicación Android nativa que permanece en `main`.
 
-## Funciones principales
+## Fuente usada
 
-- GPS en vivo y botón para centrar la posición.
-- Recorridos GPS y puntos georreferenciados.
-- Varias fotografías y descripción por punto.
-- Ficha visual al tocar un punto.
-- Proyectos/carpetas de campo.
-- Importación KML/KMZ, GPX, GeoJSON y Shapefile.
-- Exportación KML, KMZ con evidencias y Shapefile con fotografías.
-- Reporte ejecutivo PDF con mapa, logo FRAAC, fecha, elaboró, descripción y simbología.
-- Mapas base PMTiles para trabajo sin conexión.
-- Descarga de Sentinel-2 para uso satelital offline.
+La compilación utiliza exactamente el paquete **TerraPin-2.0.zip** proporcionado para esta versión. Para conservar el ZIP binario sin modificarlo, su Base64 está almacenado en cuatro partes dentro de `source/`. GitHub Actions las reconstruye antes de compilar.
 
-## Proveedores de imagen
+SHA-256 esperado del ZIP:
 
-### INEGI Ortofoto HD
-Proveedor gratuito y oficial para México, sin API key. Se consume mediante el servicio WMS de INEGI. La cobertura y fecha varían por zona; donde existe ortofoto ofrece mayor detalle que Sentinel-2.
+`bb08e350e82860fd4df38bc76e07442e952b20e1261680b7790a8d47942d52da`
 
-### Sentinel-2 Cloudless / EOX
-Cobertura global abierta. Se mantiene como respaldo online y como fuente descargable para uso offline.
-
-El mapa vectorial PMTiles puede superponer caminos y límites sobre las imágenes.
-
-## Compatibilidad
-
-El applicationId se conserva como:
-
-`mx.org.fraac.geocampo`
-
-Esto evita romper la compatibilidad con datos locales de versiones anteriores.
+El ZIP contiene la PWA completa: `index.html`, `app.js`, `sw.js`, `manifest.json`, iconos, `package.json`, configuración de Capacitor y documentación.
 
 ## Compilación
 
-GitHub Actions genera el APK debug en:
+El workflow `.github/workflows/build-terrapin-2.yml`:
 
-`app/build/outputs/apk/debug/app-debug.apk`
+1. reconstruye y verifica el ZIP;
+2. descomprime TerraPin 2.0;
+3. valida JavaScript y JSON;
+4. instala Capacitor;
+5. genera y sincroniza el proyecto Android;
+6. agrega permisos de ubicación y `WAKE_LOCK`;
+7. usa el icono TerraPin incluido en el paquete como icono del APK;
+8. compila `app-debug.apk`;
+9. publica el artefacto **TerraPin-2.0-apk**.
 
-
-### OpenAerialMap
-TerraPin consulta automáticamente la API STAC moderna de OpenAerialMap para el área visible del mapa. Cuando existe cobertura, muestra un aviso con la resolución disponible y permite activar la mejor imagen aérea encontrada. OpenAerialMap utiliza imágenes abiertas de drones, aeronaves y otros proveedores, por lo que la cobertura varía por zona.
-
-
-## Identidad visual
-
-El ícono de TerraPin utiliza el pin ecológico con paisaje de selva, río, hojas y ruta georreferenciada definido para la aplicación.
+La rama `main` no se modifica con este proceso.

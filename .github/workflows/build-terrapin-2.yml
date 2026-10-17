@@ -1,0 +1,120 @@
+name: Compilar TerraPin 2.0 Capacitor
+
+on:
+  push:
+    branches: [ terrapin-2.0-capacitor ]
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruir fuente TerraPin 2.0
+        run: |
+          set -euxo pipefail
+          cat source/TerraPin-2.0.zip.b64.part* | base64 --decode > TerraPin-2.0.zip
+          echo "bb08e350e82860fd4df38bc76e07442e952b20e1261680b7790a8d47942d52da  TerraPin-2.0.zip" | sha256sum -c -
+          unzip -q TerraPin-2.0.zip
+          test -f terrapin/package.json
+          test -f terrapin/app.js
+          test -f terrapin/index.html
+          test -f terrapin/icon-512.png
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Validar e instalar
+        working-directory: terrapin
+        run: |
+          set -euxo pipefail
+          node --check app.js
+          node --check sw.js
+          node -e "JSON.parse(require('fs').readFileSync('package.json')); JSON.parse(require('fs').readFileSync('capacitor.config.json')); JSON.parse(require('fs').readFileSync('manifest.json'));"
+          npm install
+          npm run prepare-www
+
+      - name: Crear proyecto Android
+        working-directory: terrapin
+        run: |
+          set -euxo pipefail
+          npx cap add android
+          npx cap sync android
+
+      - name: Permisos Android
+        working-directory: terrapin
+        run: |
+          set -euxo pipefail
+          M=android/app/src/main/AndroidManifest.xml
+          for P in ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION WAKE_LOCK; do
+            grep -q "$P" "$M" || sed -i "s#<uses-permission android:name=\"android.permission.INTERNET\" />#<uses-permission android:name=\"android.permission.INTERNET\" />\n    <uses-permission android:name=\"android.permission.$P\" />#" "$M"
+          done
+          grep -q ACCESS_FINE_LOCATION "$M"
+          grep -q ACCESS_COARSE_LOCATION "$M"
+          grep -q WAKE_LOCK "$M"
+
+      - name: Aplicar icono TerraPin al APK
+        working-directory: terrapin
+        run: |
+          set -euxo pipefail
+          python -m pip install --quiet pillow
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          src = Image.open("icon-512.png").convert("RGBA")
+          res = Path("android/app/src/main/res")
+          for folder, size in [
+              ("mipmap-mdpi", 48),
+              ("mipmap-hdpi", 72),
+              ("mipmap-xhdpi", 96),
+              ("mipmap-xxhdpi", 144),
+              ("mipmap-xxxhdpi", 192),
+          ]:
+              d = res / folder
+              d.mkdir(parents=True, exist_ok=True)
+              icon = src.resize((size, size), Image.Resampling.LANCZOS)
+              icon.save(d / "ic_launcher.png")
+              icon.save(d / "ic_launcher_round.png")
+          adaptive = res / "mipmap-anydpi-v26"
+          for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
+              p = adaptive / name
+              if p.exists():
+                  p.unlink()
+          print("Iconos TerraPin aplicados")
+          PY
+
+      - name: Compilar APK debug
+        working-directory: terrapin/android
+        run: |
+          set -euxo pipefail
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Publicar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TerraPin-2.0-apk
+          path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publicar fuente original verificada
+        uses: actions/upload-artifact@v4
+        with:
+          name: TerraPin-2.0-source
+          path: TerraPin-2.0.zip
+          if-no-files-found: error
