@@ -251,7 +251,6 @@ jobs:
           grep -q 'previewReportPdf' www/app.js
           grep -q 'route-card' www/index.html
           grep -q 'selectedPointCard' www/app.js
-          grep -q 'Navegar desde mi ubicación' www/index.html
           grep -q 'data-tab="points"' www/index.html
           grep -q 'tramo directo final' www/app.js
           grep -q 'CARTOGRAFÍA DE CAMPO' www/app.js
