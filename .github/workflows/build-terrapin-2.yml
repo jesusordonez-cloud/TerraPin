@@ -1,4 +1,4 @@
-name: Compilar TerraPin 3.2 Capacitor
+name: Compilar TerraPin 3.3 Capacitor
 
 on:
   push:
@@ -236,6 +236,25 @@ jobs:
           print('flujo inferior 3.2 verificado')
           PY
 
+      - name: Aplicar TerraPin 3.3 réplica visual aprobada
+        run: |
+          set -euxo pipefail
+          cat overrides/apply-v3.3.patch.gz.b64.part* | base64 --decode > /tmp/terrapin-v3.3.patch.gz
+          echo "2dbfd1ed5bd9d4245106afbd2e7326079aa1ff7266567301a1e494f7b11cef87  /tmp/terrapin-v3.3.patch.gz" | sha256sum -c -
+          gunzip -c /tmp/terrapin-v3.3.patch.gz > /tmp/terrapin-v3.3.patch
+          echo "d9de86ed46a12f6e3050cb38a4f32d5722f711d8b34314296707a502341f662b  /tmp/terrapin-v3.3.patch" | sha256sum -c -
+          patch --batch -p1 -d terrapin < /tmp/terrapin-v3.3.patch
+          grep -q '"version": "3.3.0"' terrapin/package.json
+          grep -q 'TerraPin 3.3 · EXACT APPROVED UI' terrapin/index.html
+          grep -q 'FIELD GIS <b>3.3</b>' terrapin/index.html
+          grep -q 'leaflet/leaflet.css' terrapin/index.html
+          grep -q 'leaflet/leaflet.js' terrapin/index.html
+          grep -q "Calles / Blanco" terrapin/app.js
+          grep -q "OpenStreetMap · sin API" terrapin/app.js
+          grep -q 'setIdleNav' terrapin/app.js
+          grep -q 'terrapin-shell-v3.3' terrapin/sw.js
+          ! grep -q 'id="basemapQuick"' terrapin/index.html
+
       - name: Node 20
         uses: actions/setup-node@v4
         with:
@@ -255,7 +274,7 @@ jobs:
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      - name: Validar TerraPin 3.2 e instalar dependencias GIS
+      - name: Validar TerraPin 3.3 e instalar dependencias GIS
         working-directory: terrapin
         run: |
           set -euxo pipefail
@@ -269,6 +288,12 @@ jobs:
           test -f www/shpwrite.js
           test -f www/jszip.min.js
           test -f www/icon-512.png
+          test -f www/leaflet/leaflet.js
+          test -f www/leaflet/leaflet.css
+          test -f www/leaflet/images/marker-icon.png
+          grep -q 'TerraPin 3.3 · EXACT APPROVED UI' www/index.html
+          grep -q 'setIdleNav' www/app.js
+          grep -q 'OpenStreetMap · sin API' www/app.js
           grep -q 'routeToWaypoint' www/app.js
           grep -q 'previewReportPdf' www/app.js
           grep -q 'route-card' www/index.html
@@ -294,9 +319,9 @@ jobs:
           grep -q 'map-widget legend-widget' www/app.js
           grep -q 'reportLayout' www/app.js
           grep -q 'reportMapStyle' www/app.js
-          grep -q 'FIELD GIS <b>3.1</b>' www/index.html
+          grep -q 'FIELD GIS <b>3.3</b>' www/index.html
           grep -q 'TerraPin 3.2 · single bottom flow' www/index.html
-          grep -q 'terrapin-shell-v3.2' www/sw.js
+          grep -q 'terrapin-shell-v3.3' www/sw.js
           grep -q 'composition-drawer-toggle' www/index.html
           grep -q 'spMore' www/app.js
           grep -q 'infoMore' www/app.js
@@ -366,24 +391,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Preparar fuente TerraPin 3.2
+      - name: Preparar fuente TerraPin 3.3
         run: |
           set -euxo pipefail
-          rm -f TerraPin-3.2-source.zip
-          zip -qr TerraPin-3.2-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
-          test -s TerraPin-3.2-source.zip
-          sha256sum TerraPin-3.2-source.zip
+          rm -f TerraPin-3.3-source.zip
+          zip -qr TerraPin-3.3-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
+          test -s TerraPin-3.3-source.zip
+          sha256sum TerraPin-3.3-source.zip
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-3.2-apk
+          name: TerraPin-3.3-apk
           path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publicar fuente 3.2
+      - name: Publicar fuente 3.3
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-3.2-source
-          path: TerraPin-3.2-source.zip
+          name: TerraPin-3.3-source
+          path: TerraPin-3.3-source.zip
           if-no-files-found: error
