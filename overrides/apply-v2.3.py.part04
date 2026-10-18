@@ -15,7 +15,7 @@ anchor="""const folderName = id => S.folders.find(f => f.id === id)?.name || 'Ge
 const promptName ="""
 hud="""const folderName = id => S.folders.find(f => f.id === id)?.name || 'General';
 const refreshProjectHud = () => { const p=S.projects.find(x=>x.id===S.settings.activeProject); const el=$('#projectHud'); if(el)el.textContent=p?`Proyecto · ${p.name}`:'Sin proyecto activo'; };
-const refreshMapHud = () => { const c=map.getCenter(), el=$('#mapHud'); if(!el)return; const net=navigator.onLine?'ONLINE':'OFFLINE'; const gps=S.me?'GPS':'SIN GPS'; el.innerHTML=`<span>${c.lat.toFixed(5)}, ${c.lng.toFixed(5)|</span><b>z${map.getZoom()}</b><i class="${navigator.onLine?'on':''}">${net}</i><i class="${S.me?'on':''}">${gps}</i>`; };
+const refreshMapHud = () => { const c=map.getCenter(), el=$('#mapHud'); if(!el)return; const net=navigator.onLine?'ONLINE':'OFFLINE'; const gps=S.me?'GPS':'SIN GPS'; el.innerHTML=`<span>${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}</span><b>z${map.getZoom()}</b><i class="${navigator.onLine?'on':''}">${net}</i><i class="${S.me?'on':''}">${gps}</i>`; };
 map.on('moveend zoomend',refreshMapHud);window.addEventListener('online',refreshMapHud);window.addEventListener('offline',refreshMapHud);
 const promptName ="""
 assert anchor in app
