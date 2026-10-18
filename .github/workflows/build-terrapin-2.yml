@@ -1,4 +1,4 @@
-name: Compilar TerraPin 3.1 Capacitor
+name: Compilar TerraPin 3.2 Capacitor
 
 on:
   push:
@@ -214,6 +214,28 @@ jobs:
           grep -q 'terrapin-shell-v3.1' terrapin/sw.js
           ! grep -q 'id="basemapQuick"' terrapin/index.html
 
+      - name: Aplicar TerraPin 3.2 flujo inferior único
+        run: |
+          set -euxo pipefail
+          cat overrides/apply-v3.2.patch.gz.b64.part* | base64 --decode > /tmp/terrapin-v3.2.patch.gz
+          echo "8563c63327b861a9bd9f01aa0a8d7cf7fb922a345d3d6c80852d4e0f76b87714  /tmp/terrapin-v3.2.patch.gz" | sha256sum -c -
+          gunzip -c /tmp/terrapin-v3.2.patch.gz > /tmp/terrapin-v3.2.patch
+          echo "d536b0863dbd44f4b1b2f81049d57690eb7e550be420fd1e177d50534a080138  /tmp/terrapin-v3.2.patch" | sha256sum -c -
+          patch --batch -p1 -d terrapin < /tmp/terrapin-v3.2.patch
+          grep -q '"version": "3.2.0"' terrapin/package.json
+          grep -q 'TerraPin 3.2 · single bottom flow' terrapin/index.html
+          grep -q '.bottom-stack .recbar.on{display:flex!important}' terrapin/index.html
+          grep -q '.bottom-stack .map-hud{order:50!important}' terrapin/index.html
+          grep -q '.bottom-stack .nav{order:60!important}' terrapin/index.html
+          grep -q 'terrapin-shell-v3.2' terrapin/sw.js
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('terrapin/index.html').read_text()
+          assert s.index('<div class="bottom-stack" id="bottomStack">') < s.index('<div class="recbar" id="recbar">') < s.index('<div class="map-hud" id="mapHud">')
+          assert 'id="basemapQuick"' not in s
+          print('flujo inferior 3.2 verificado')
+          PY
+
       - name: Node 20
         uses: actions/setup-node@v4
         with:
@@ -233,7 +255,7 @@ jobs:
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      - name: Validar TerraPin 3.1 e instalar dependencias GIS
+      - name: Validar TerraPin 3.2 e instalar dependencias GIS
         working-directory: terrapin
         run: |
           set -euxo pipefail
@@ -273,11 +295,21 @@ jobs:
           grep -q 'reportLayout' www/app.js
           grep -q 'reportMapStyle' www/app.js
           grep -q 'FIELD GIS <b>3.1</b>' www/index.html
-          grep -q 'terrapin-shell-v3.1' www/sw.js
+          grep -q 'TerraPin 3.2 · single bottom flow' www/index.html
+          grep -q 'terrapin-shell-v3.2' www/sw.js
           grep -q 'composition-drawer-toggle' www/index.html
           grep -q 'spMore' www/app.js
           grep -q 'infoMore' www/app.js
           ! grep -q 'id="basemapQuick"' www/index.html
+          grep -q '.bottom-stack .recbar.on{display:flex!important}' www/index.html
+          grep -q '.bottom-stack .map-hud{order:50!important}' www/index.html
+          grep -q '.bottom-stack .nav{order:60!important}' www/index.html
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('www/index.html').read_text()
+          assert s.index('<div class="bottom-stack" id="bottomStack">') < s.index('<div class="recbar" id="recbar">') < s.index('<div class="map-hud" id="mapHud">')
+          print('orden DOM 3.2 verificado')
+          PY
 
       - name: Crear proyecto Android
         working-directory: terrapin
@@ -334,24 +366,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Preparar fuente TerraPin 3.1
+      - name: Preparar fuente TerraPin 3.2
         run: |
           set -euxo pipefail
-          rm -f TerraPin-3.1-source.zip
-          zip -qr TerraPin-3.1-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
-          test -s TerraPin-3.1-source.zip
-          sha256sum TerraPin-3.1-source.zip
+          rm -f TerraPin-3.2-source.zip
+          zip -qr TerraPin-3.2-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
+          test -s TerraPin-3.2-source.zip
+          sha256sum TerraPin-3.2-source.zip
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-3.1-apk
+          name: TerraPin-3.2-apk
           path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publicar fuente 3.1
+      - name: Publicar fuente 3.2
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-3.1-source
-          path: TerraPin-3.1-source.zip
+          name: TerraPin-3.2-source
+          path: TerraPin-3.2-source.zip
           if-no-files-found: error
