@@ -53,9 +53,9 @@ jobs:
         run: |
           set -euxo pipefail
           base64 --decode overrides/apply-v2.2.py.gz.b64 > /tmp/apply-v2.2.py.gz
-          echo "3088823a4c55c6038f335d39477c7a7952421b401abd7a735d9d7829e55cdef8  /tmp/apply-v2.2.py.gz" | sha256sum -c -
+          echo "2f9796dd047a90aad2c885e29ff1169cd994cc4a0974c1d583583bfaf64ac22b  /tmp/apply-v2.2.py.gz" | sha256sum -c -
           gunzip -c /tmp/apply-v2.2.py.gz > /tmp/apply-v2.2.py
-          echo "c51c30f46aa832c7151d2bfd8aa3082d0b46b5ae1e6e8e6f32bf8cb63f13804b  /tmp/apply-v2.2.py" | sha256sum -c -
+          echo "6372a56faa361b39e609cc604e899729593e4790e8545bf2030dec77bef4b5e6  /tmp/apply-v2.2.py" | sha256sum -c -
           python /tmp/apply-v2.2.py terrapin
           grep -q '"version": "2.2.0"' terrapin/package.json
           grep -q 'exportProjectShape' terrapin/app.js
