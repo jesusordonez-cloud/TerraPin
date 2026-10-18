@@ -154,7 +154,7 @@ jobs:
       - name: Aplicar corrección dinámica y cartografía real TerraPin 2.9
         run: |
           set -euxo pipefail
-          cp overrides/apply-v2.9.py.gz /tmp/apply-v2.9.py.gz
+          cat overrides/apply-v2.9.py.gz.part* > /tmp/apply-v2.9.py.gz
           echo "9b3815b3b82d8a68b8acebe9d4c89c6bfc7d32802f3653f58c65ffad57f197ef  /tmp/apply-v2.9.py.gz" | sha256sum -c -
           gunzip -c /tmp/apply-v2.9.py.gz > /tmp/apply-v2.9.py
           echo "8b441cb0059da775f7008e3a040ff9ae4c01ba46de9314bcb7bde30433b6afa5  /tmp/apply-v2.9.py" | sha256sum -c -
