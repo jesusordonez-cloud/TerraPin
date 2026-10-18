@@ -169,7 +169,7 @@ jobs:
       - name: Aplicar TerraPin 3.0 Premium Crystal SIG
         run: |
           set -euxo pipefail
-          cat overrides/apply-v3.0.patch.gz.part* > /tmp/terrapin-v3.0.patch.gz
+          cat overrides/apply-v3.0.patch.gz.part00 overrides/apply-v3.0.patch.gz.part01 overrides/apply-v3.0.patch.gz.part02x0 overrides/apply-v3.0.patch.gz.part02x1 overrides/apply-v3.0.patch.gz.part03 > /tmp/terrapin-v3.0.patch.gz
           echo "8389a71bd3e4515b1e82170d75ef63b0e1066d115c6cd670270ca19376de83db  /tmp/terrapin-v3.0.patch.gz" | sha256sum -c -
           gunzip -c /tmp/terrapin-v3.0.patch.gz > /tmp/terrapin-v3.0.patch
           echo "30960fbc54426c347f6022989f397b6f43ce645e968c100d854780e654a3971e  /tmp/terrapin-v3.0.patch" | sha256sum -c -
