@@ -1,4 +1,4 @@
-name: Compilar TerraPin 2.5 Capacitor
+name: Compilar TerraPin 2.6 Capacitor
 
 on:
   push:
@@ -103,6 +103,22 @@ jobs:
           grep -q 'FIELD GIS 2.5' terrapin/index.html
           grep -q 'terrapin-shell-v2.5' terrapin/sw.js
 
+      - name: Aplicar editor PDF y Crystal UI TerraPin 2.6
+        run: |
+          set -euxo pipefail
+          cp overrides/apply-v2.6.py.gz /tmp/apply-v2.6.py.gz
+          echo "ab3efde5a59ab6ec749f15e8b8a5e9f2b6351c616e828109fc9a47e32b6d247d  /tmp/apply-v2.6.py.gz" | sha256sum -c -
+          gunzip -c /tmp/apply-v2.6.py.gz > /tmp/apply-v2.6.py
+          echo "6973b8986073e328bfc6944b35385e06638cabc444f6570bc5f7f7533ecf8808  /tmp/apply-v2.6.py" | sha256sum -c -
+          python -m py_compile /tmp/apply-v2.6.py
+          python /tmp/apply-v2.6.py terrapin
+          grep -q '"version": "2.6.0"' terrapin/package.json
+          grep -q 'pdf-editable' terrapin/index.html
+          grep -q 'Elaborado por' terrapin/app.js
+          grep -q 'reportLegendLabels' terrapin/app.js
+          grep -q 'FIELD GIS 2.6' terrapin/index.html
+          grep -q 'terrapin-shell-v2.6' terrapin/sw.js
+
       - name: Node 20
         uses: actions/setup-node@v4
         with:
@@ -122,7 +138,7 @@ jobs:
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      - name: Validar TerraPin 2.5 e instalar dependencias GIS
+      - name: Validar TerraPin 2.6 e instalar dependencias GIS
         working-directory: terrapin
         run: |
           set -euxo pipefail
@@ -144,8 +160,11 @@ jobs:
           grep -q 'data-tab="points"' www/index.html
           grep -q 'tramo directo final' www/app.js
           grep -q 'CARTOGRAFÍA DE CAMPO' www/app.js
-          grep -q 'FIELD GIS 2.5' www/index.html
-          grep -q 'terrapin-shell-v2.5' www/sw.js
+          grep -q 'pdf-editable' www/index.html
+          grep -q 'Elaborado por' www/app.js
+          grep -q 'reportLegendLabels' www/app.js
+          grep -q 'FIELD GIS 2.6' www/index.html
+          grep -q 'terrapin-shell-v2.6' www/sw.js
 
       - name: Crear proyecto Android
         working-directory: terrapin
@@ -202,24 +221,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Preparar fuente TerraPin 2.5
+      - name: Preparar fuente TerraPin 2.6
         run: |
           set -euxo pipefail
-          rm -f TerraPin-2.5-source.zip
-          zip -qr TerraPin-2.5-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
-          test -s TerraPin-2.5-source.zip
-          sha256sum TerraPin-2.5-source.zip
+          rm -f TerraPin-2.6-source.zip
+          zip -qr TerraPin-2.6-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
+          test -s TerraPin-2.6-source.zip
+          sha256sum TerraPin-2.6-source.zip
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.5-apk
+          name: TerraPin-2.6-apk
           path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publicar fuente 2.5
+      - name: Publicar fuente 2.6
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.5-source
-          path: TerraPin-2.5-source.zip
+          name: TerraPin-2.6-source
+          path: TerraPin-2.6-source.zip
           if-no-files-found: error
