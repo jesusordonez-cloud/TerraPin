@@ -1,4 +1,4 @@
-name: Compilar TerraPin 2.1 Capacitor
+name: Compilar TerraPin 2.2 Capacitor
 
 on:
   push:
@@ -48,7 +48,21 @@ jobs:
           grep -q '"version": "2.1.0"' terrapin/package.json
           grep -q 'POINT_ICONS' terrapin/app.js
           grep -q 'createReportPdf' terrapin/app.js
-          grep -q 'jspdf.umd.min.js' terrapin/index.html
+
+      - name: Aplicar mejoras GIS y diseño TerraPin 2.2
+        run: |
+          set -euxo pipefail
+          base64 --decode overrides/apply-v2.2.py.gz.b64 > /tmp/apply-v2.2.py.gz
+          echo "3088823a4c55c6038f335d39477c7a7952421b401abd7a735d9d7829e55cdef8  /tmp/apply-v2.2.py.gz" | sha256sum -c -
+          gunzip -c /tmp/apply-v2.2.py.gz > /tmp/apply-v2.2.py
+          echo "c51c30f46aa832c7151d2bfd8aa3082d0b46b5ae1e6e8e6f32bf8cb63f13804b  /tmp/apply-v2.2.py" | sha256sum -c -
+          python /tmp/apply-v2.2.py terrapin
+          grep -q '"version": "2.2.0"' terrapin/package.json
+          grep -q 'exportProjectShape' terrapin/app.js
+          grep -q 'importShapeFiles' terrapin/app.js
+          grep -q 'shp.min.js' terrapin/index.html
+          grep -q 'shpwrite.js' terrapin/index.html
+          grep -q 'jszip.min.js' terrapin/index.html
 
       - name: Node 20
         uses: actions/setup-node@v4
@@ -69,7 +83,7 @@ jobs:
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      - name: Validar e instalar dependencias
+      - name: Validar e instalar dependencias GIS
         working-directory: terrapin
         run: |
           set -euxo pipefail
@@ -79,6 +93,9 @@ jobs:
           npm install
           npm run prepare-www
           test -f www/jspdf.umd.min.js
+          test -f www/shp.min.js
+          test -f www/shpwrite.js
+          test -f www/jszip.min.js
           test -f www/icon-512.png
 
       - name: Crear proyecto Android
@@ -136,24 +153,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Preparar fuente TerraPin 2.1
+      - name: Preparar fuente TerraPin 2.2
         run: |
           set -euxo pipefail
-          rm -f TerraPin-2.1-source.zip
-          zip -qr TerraPin-2.1-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
-          test -s TerraPin-2.1-source.zip
-          sha256sum TerraPin-2.1-source.zip
+          rm -f TerraPin-2.2-source.zip
+          zip -qr TerraPin-2.2-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
+          test -s TerraPin-2.2-source.zip
+          sha256sum TerraPin-2.2-source.zip
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.1-apk
+          name: TerraPin-2.2-apk
           path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publicar fuente 2.1
+      - name: Publicar fuente 2.2
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.1-source
-          path: TerraPin-2.1-source.zip
+          name: TerraPin-2.2-source
+          path: TerraPin-2.2-source.zip
           if-no-files-found: error
