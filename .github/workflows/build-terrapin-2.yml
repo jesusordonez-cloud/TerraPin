@@ -1,4 +1,4 @@
-name: Compilar TerraPin 2.9 Capacitor
+name: Compilar TerraPin 3.0 Capacitor
 
 on:
   push:
@@ -166,6 +166,25 @@ jobs:
           grep -q 'FIELD GIS <b>2.9</b>' terrapin/index.html
           grep -q 'terrapin-shell-v2.9' terrapin/sw.js
 
+      - name: Aplicar TerraPin 3.0 Premium Crystal SIG
+        run: |
+          set -euxo pipefail
+          cat overrides/apply-v3.0.patch.gz.part* > /tmp/terrapin-v3.0.patch.gz
+          echo "8389a71bd3e4515b1e82170d75ef63b0e1066d115c6cd670270ca19376de83db  /tmp/terrapin-v3.0.patch.gz" | sha256sum -c -
+          gunzip -c /tmp/terrapin-v3.0.patch.gz > /tmp/terrapin-v3.0.patch
+          echo "30960fbc54426c347f6022989f397b6f43ce645e968c100d854780e654a3971e  /tmp/terrapin-v3.0.patch" | sha256sum -c -
+          patch -p1 -d terrapin < /tmp/terrapin-v3.0.patch
+          grep -q '"version": "3.0.0"' terrapin/package.json
+          grep -q 'bottom-stack' terrapin/index.html
+          grep -q 'basemap-quick' terrapin/index.html
+          grep -q 'folderTreeHtml' terrapin/app.js
+          grep -q 'bindLayerDrag' terrapin/app.js
+          grep -q 'map-widget legend-widget' terrapin/app.js
+          grep -q 'reportLayout' terrapin/app.js
+          grep -q 'reportMapStyle' terrapin/app.js
+          grep -q 'FIELD GIS <b>3.0</b>' terrapin/index.html
+          grep -q 'terrapin-shell-v3.0' terrapin/sw.js
+
       - name: Node 20
         uses: actions/setup-node@v4
         with:
@@ -185,7 +204,7 @@ jobs:
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      - name: Validar TerraPin 2.9 e instalar dependencias GIS
+      - name: Validar TerraPin 3.0 e instalar dependencias GIS
         working-directory: terrapin
         run: |
           set -euxo pipefail
@@ -221,6 +240,15 @@ jobs:
           grep -q 'buildReportBasemap' www/app.js
           grep -q 'FIELD GIS <b>2.9</b>' www/index.html
           grep -q 'terrapin-shell-v2.9' www/sw.js
+          grep -q 'bottom-stack' www/index.html
+          grep -q 'basemap-quick' www/index.html
+          grep -q 'folderTreeHtml' www/app.js
+          grep -q 'bindLayerDrag' www/app.js
+          grep -q 'map-widget legend-widget' www/app.js
+          grep -q 'reportLayout' www/app.js
+          grep -q 'reportMapStyle' www/app.js
+          grep -q 'FIELD GIS <b>3.0</b>' www/index.html
+          grep -q 'terrapin-shell-v3.0' www/sw.js
 
       - name: Crear proyecto Android
         working-directory: terrapin
@@ -277,24 +305,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Preparar fuente TerraPin 2.9
+      - name: Preparar fuente TerraPin 3.0
         run: |
           set -euxo pipefail
-          rm -f TerraPin-2.9-source.zip
-          zip -qr TerraPin-2.9-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
-          test -s TerraPin-2.9-source.zip
-          sha256sum TerraPin-2.9-source.zip
+          rm -f TerraPin-3.0-source.zip
+          zip -qr TerraPin-3.0-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
+          test -s TerraPin-3.0-source.zip
+          sha256sum TerraPin-3.0-source.zip
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.9-apk
+          name: TerraPin-3.0-apk
           path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publicar fuente 2.9
+      - name: Publicar fuente 3.0
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.9-source
-          path: TerraPin-2.9-source.zip
+          name: TerraPin-3.0-source
+          path: TerraPin-3.0-source.zip
           if-no-files-found: error
