@@ -1,4 +1,4 @@
-name: Compilar TerraPin 2.2 Capacitor
+name: Compilar TerraPin 2.3 Capacitor
 
 on:
   push:
@@ -61,6 +61,17 @@ jobs:
           grep -q 'shpwrite.js' terrapin/index.html
           grep -q 'jszip.min.js' terrapin/index.html
 
+      - name: Aplicar navegación, vista previa y rediseño TerraPin 2.3
+        run: |
+          set -euxo pipefail
+          python -m py_compile overrides/apply-v2.3.py
+          echo "7fad236f14f1017e1f749535a706bbb34c58e23ffb28dd988929df9618e82a89  overrides/apply-v2.3.py" | sha256sum -c -
+          python overrides/apply-v2.3.py terrapin
+          grep -q '"version": "2.3.0"' terrapin/package.json
+          grep -q 'routeToWaypoint' terrapin/app.js
+          grep -q 'previewReportPdf' terrapin/app.js
+          grep -q 'route-card' terrapin/index.html
+
       - name: Node 20
         uses: actions/setup-node@v4
         with:
@@ -80,7 +91,7 @@ jobs:
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      - name: Validar e instalar dependencias GIS
+      - name: Validar TerraPin 2.3 e instalar dependencias GIS
         working-directory: terrapin
         run: |
           set -euxo pipefail
@@ -94,6 +105,9 @@ jobs:
           test -f www/shpwrite.js
           test -f www/jszip.min.js
           test -f www/icon-512.png
+          grep -q 'routeToWaypoint' www/app.js
+          grep -q 'previewReportPdf' www/app.js
+          grep -q 'route-card' www/index.html
 
       - name: Crear proyecto Android
         working-directory: terrapin
@@ -150,24 +164,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Preparar fuente TerraPin 2.2
+      - name: Preparar fuente TerraPin 2.3
         run: |
           set -euxo pipefail
-          rm -f TerraPin-2.2-source.zip
-          zip -qr TerraPin-2.2-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
-          test -s TerraPin-2.2-source.zip
-          sha256sum TerraPin-2.2-source.zip
+          rm -f TerraPin-2.3-source.zip
+          zip -qr TerraPin-2.3-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
+          test -s TerraPin-2.3-source.zip
+          sha256sum TerraPin-2.3-source.zip
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.2-apk
+          name: TerraPin-2.3-apk
           path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
       - name: Publicar fuente 2.2
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.2-source
-          path: TerraPin-2.2-source.zip
+          name: TerraPin-2.3-source
+          path: TerraPin-2.3-source.zip
           if-no-files-found: error
