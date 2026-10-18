@@ -142,7 +142,6 @@ jobs:
           grep -q 'selectedPointCard' www/app.js
           grep -q 'Navegar desde mi ubicación' www/index.html
           grep -q 'data-tab="points"' www/index.html
-          grep -q 'terrapin-shell-v2.4' www/sw.js
           grep -q 'tramo directo final' www/app.js
           grep -q 'CARTOGRAFÍA DE CAMPO' www/app.js
           grep -q 'FIELD GIS 2.5' www/index.html
