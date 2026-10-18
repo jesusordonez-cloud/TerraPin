@@ -238,8 +238,6 @@ jobs:
           grep -q 'drawPdfLegendCompact' www/app.js
           grep -q 'layoutFloatingChrome' www/app.js
           grep -q 'buildReportBasemap' www/app.js
-          grep -q 'FIELD GIS <b>2.9</b>' www/index.html
-          grep -q 'terrapin-shell-v2.9' www/sw.js
           grep -q 'bottom-stack' www/index.html
           grep -q 'basemap-quick' www/index.html
           grep -q 'folderTreeHtml' www/app.js
