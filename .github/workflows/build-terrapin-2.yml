@@ -1,9 +1,12 @@
-name: Compilar TerraPin 2.0 Capacitor
+name: Compilar TerraPin 2.1 Capacitor
 
 on:
   push:
     branches: [ terrapin-2.0-capacitor ]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   apk:
@@ -14,7 +17,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruir fuente TerraPin 2.0
+      - name: Reconstruir fuente TerraPin 2.0 base
         run: |
           set -euxo pipefail
           cat source/TerraPin-2.0.zip.b64.part* | base64 --decode > TerraPin-2.0.zip
@@ -23,7 +26,29 @@ jobs:
           test -f terrapin/package.json
           test -f terrapin/app.js
           test -f terrapin/index.html
-          test -f terrapin/icon-512.png
+
+      - name: Reconstruir parche TerraPin 2.1
+        run: |
+          set -euxo pipefail
+          cat overrides/apply-v2.1.py.gz.part* > /tmp/apply-v2.1.py.gz
+          echo "41efc7f3f3e2a704d8b57e943069257216e47f5950500158073e70363d582e3f  /tmp/apply-v2.1.py.gz" | sha256sum -c -
+          gunzip -c /tmp/apply-v2.1.py.gz > /tmp/apply-v2.1.py
+          echo "be816b54d59e88296b9b9368f54a4c43a6b6f393427af221d8570b826f2dd8fe  /tmp/apply-v2.1.py" | sha256sum -c -
+
+      - name: Recuperar logo TerraPin anterior y aplicar mejoras 2.1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euxo pipefail
+          python -m pip install --quiet pillow
+          curl --fail --location             -H "Authorization: Bearer $GH_TOKEN"             -H "Accept: application/vnd.github.raw+json"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/$REPOSITORY/contents/app/src/main/res/drawable/terrapin_logo.webp?ref=main"             -o /tmp/terrapin_logo.webp
+          test -s /tmp/terrapin_logo.webp
+          python /tmp/apply-v2.1.py terrapin /tmp/terrapin_logo.webp
+          grep -q '"version": "2.1.0"' terrapin/package.json
+          grep -q 'POINT_ICONS' terrapin/app.js
+          grep -q 'createReportPdf' terrapin/app.js
+          grep -q 'jspdf.umd.min.js' terrapin/index.html
 
       - name: Node 20
         uses: actions/setup-node@v4
@@ -44,7 +69,7 @@ jobs:
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      - name: Validar e instalar
+      - name: Validar e instalar dependencias
         working-directory: terrapin
         run: |
           set -euxo pipefail
@@ -53,6 +78,8 @@ jobs:
           node -e "JSON.parse(require('fs').readFileSync('package.json')); JSON.parse(require('fs').readFileSync('capacitor.config.json')); JSON.parse(require('fs').readFileSync('manifest.json'));"
           npm install
           npm run prepare-www
+          test -f www/jspdf.umd.min.js
+          test -f www/icon-512.png
 
       - name: Crear proyecto Android
         working-directory: terrapin
@@ -73,11 +100,10 @@ jobs:
           grep -q ACCESS_COARSE_LOCATION "$M"
           grep -q WAKE_LOCK "$M"
 
-      - name: Aplicar icono TerraPin al APK
+      - name: Aplicar logo TerraPin a iconos Android
         working-directory: terrapin
         run: |
           set -euxo pipefail
-          python -m pip install --quiet pillow
           python - <<'PY'
           from pathlib import Path
           from PIL import Image
@@ -100,7 +126,7 @@ jobs:
               p = adaptive / name
               if p.exists():
                   p.unlink()
-          print("Iconos TerraPin aplicados")
+          print("Logo TerraPin anterior aplicado al launcher")
           PY
 
       - name: Compilar APK debug
@@ -110,16 +136,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
+      - name: Preparar fuente TerraPin 2.1
+        run: |
+          set -euxo pipefail
+          rm -f TerraPin-2.1-source.zip
+          zip -qr TerraPin-2.1-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
+          test -s TerraPin-2.1-source.zip
+          sha256sum TerraPin-2.1-source.zip
+
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.0-apk
+          name: TerraPin-2.1-apk
           path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publicar fuente original verificada
+      - name: Publicar fuente 2.1
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.0-source
-          path: TerraPin-2.0.zip
+          name: TerraPin-2.1-source
+          path: TerraPin-2.1-source.zip
           if-no-files-found: error
