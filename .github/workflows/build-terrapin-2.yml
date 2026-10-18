@@ -1,4 +1,4 @@
-name: Compilar TerraPin 3.0 Capacitor
+name: Compilar TerraPin 3.1 Capacitor
 
 on:
   push:
@@ -185,6 +185,23 @@ jobs:
           grep -q 'FIELD GIS <b>3.0</b>' terrapin/index.html
           grep -q 'terrapin-shell-v3.0' terrapin/sw.js
 
+      - name: Aplicar TerraPin 3.1 layout aprobado
+        run: |
+          set -euxo pipefail
+          cat overrides/apply-v3.1.patch.gz.p00 overrides/apply-v3.1.patch.gz.p01 > /tmp/terrapin-v3.1.patch.gz
+          echo "e8c9d7ab006f49a3fc6bd6e9e1b5c6992e41721cdbb8fc2bb56659240d41e4c4  /tmp/terrapin-v3.1.patch.gz" | sha256sum -c -
+          gunzip -c /tmp/terrapin-v3.1.patch.gz > /tmp/terrapin-v3.1.patch
+          echo "62debc5f2aebb85036b71a19868ee990df6d6011fef7defd47b412403d6d40e3  /tmp/terrapin-v3.1.patch" | sha256sum -c -
+          patch -p1 -d terrapin < /tmp/terrapin-v3.1.patch
+          grep -q '"version": "3.1.0"' terrapin/package.json
+          grep -q 'FIELD GIS <b>3.1</b>' terrapin/index.html
+          grep -q 'composition-drawer-toggle' terrapin/index.html
+          grep -q 'A4 HORIZONTAL · PDF · 3.1' terrapin/app.js
+          grep -q 'spMore' terrapin/app.js
+          grep -q 'infoMore' terrapin/app.js
+          grep -q 'terrapin-shell-v3.1' terrapin/sw.js
+          ! grep -q 'id="basemapQuick"' terrapin/index.html
+
       - name: Node 20
         uses: actions/setup-node@v4
         with:
@@ -204,7 +221,7 @@ jobs:
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      - name: Validar TerraPin 3.0 e instalar dependencias GIS
+      - name: Validar TerraPin 3.1 e instalar dependencias GIS
         working-directory: terrapin
         run: |
           set -euxo pipefail
@@ -239,14 +256,17 @@ jobs:
           grep -q 'layoutFloatingChrome' www/app.js
           grep -q 'buildReportBasemap' www/app.js
           grep -q 'bottom-stack' www/index.html
-          grep -q 'basemap-quick' www/index.html
           grep -q 'folderTreeHtml' www/app.js
           grep -q 'bindLayerDrag' www/app.js
           grep -q 'map-widget legend-widget' www/app.js
           grep -q 'reportLayout' www/app.js
           grep -q 'reportMapStyle' www/app.js
-          grep -q 'FIELD GIS <b>3.0</b>' www/index.html
-          grep -q 'terrapin-shell-v3.0' www/sw.js
+          grep -q 'FIELD GIS <b>3.1</b>' www/index.html
+          grep -q 'terrapin-shell-v3.1' www/sw.js
+          grep -q 'composition-drawer-toggle' www/index.html
+          grep -q 'spMore' www/app.js
+          grep -q 'infoMore' www/app.js
+          ! grep -q 'id="basemapQuick"' www/index.html
 
       - name: Crear proyecto Android
         working-directory: terrapin
@@ -303,24 +323,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Preparar fuente TerraPin 3.0
+      - name: Preparar fuente TerraPin 3.1
         run: |
           set -euxo pipefail
-          rm -f TerraPin-3.0-source.zip
-          zip -qr TerraPin-3.0-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
-          test -s TerraPin-3.0-source.zip
-          sha256sum TerraPin-3.0-source.zip
+          rm -f TerraPin-3.1-source.zip
+          zip -qr TerraPin-3.1-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
+          test -s TerraPin-3.1-source.zip
+          sha256sum TerraPin-3.1-source.zip
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-3.0-apk
+          name: TerraPin-3.1-apk
           path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publicar fuente 3.0
+      - name: Publicar fuente 3.1
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-3.0-source
-          path: TerraPin-3.0-source.zip
+          name: TerraPin-3.1-source
+          path: TerraPin-3.1-source.zip
           if-no-files-found: error
