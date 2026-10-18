@@ -64,9 +64,10 @@ jobs:
       - name: Aplicar navegación, vista previa y rediseño TerraPin 2.3
         run: |
           set -euxo pipefail
-          python -m py_compile overrides/apply-v2.3.py
-          echo "7fad236f14f1017e1f749535a706bbb34c58e23ffb28dd988929df9618e82a89  overrides/apply-v2.3.py" | sha256sum -c -
-          python overrides/apply-v2.3.py terrapin
+          cat overrides/apply-v2.3.py.part* > /tmp/apply-v2.3.py
+          echo "7fad236f14f1017e1f749535a706bbb34c58e23ffb28dd988929df9618e82a89  /tmp/apply-v2.3.py" | sha256sum -c -
+          python -m py_compile /tmp/apply-v2.3.py
+          python /tmp/apply-v2.3.py terrapin
           grep -q '"version": "2.3.0"' terrapin/package.json
           grep -q 'routeToWaypoint' terrapin/app.js
           grep -q 'previewReportPdf' terrapin/app.js
@@ -179,7 +180,7 @@ jobs:
           path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publicar fuente 2.2
+      - name: Publicar fuente 2.3
         uses: actions/upload-artifact@v4
         with:
           name: TerraPin-2.3-source

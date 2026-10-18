@@ -1,0 +1,35 @@
+Kind = p => {
+  const s=routeClass(p);
+  if (/terracer|gravel|unpaved|tierra/.test(s)) return 'terracería';
+  if (/saca.?cosecha|track|brecha|forestal/.test(s)) return 'camino rural';
+  if (/path|trail|sendero|vereda/.test(s)) return 'sendero';
+  if (/street|calle|avenida|residential|primary|secondary|tertiary|carretera/.test(s)) return 'vialidad';
+  return 'trazo SIG';
+};
+const localLineSources = () => {
+  const out=[];
+  S.tracks.forEach(t=>{ if(t.points?.length>1) out.push({name:t.name||'Línea',props:t.properties||{},coords:t.points.map(p=>[p[0],p[1]])}); });
+  S.vectors.forEach(v=>{ const g=v.feature?.geometry, p=v.feature?.properties||{}; if(!g)return; if(g.type==='LineString')out.push({name:v.name||'Línea',props:p,coords:g.coordinates.map(c=>[c[1],c[0]])}); if(g.type==='MultiLineString')g.coordinates.forEach((r,i)=>out.push({name:(v.name||'Línea')+' '+(i+1),props:p,coords:r.map(c=>[c[1],c[0]])})); });
+  return out;
+};
+const buildLocalGraph = () => {
+  const nodes=[], byKey=new Map(), adj=[]; const endpoints=[];
+  const nodeFor=(p,end=false)=>{ const key=`${Math.round(p[0]*1e5)},${Math.round(p[1]*1e5)}`; let i=byKey.get(key); if(i===undefined){i=nodes.length;byKey.set(key,i);nodes.push([p[0],p[1]]);adj.push([]);} if(end)endpoints.push(i); return i; };
+  const edge=(a,b,props,name,extra=1)=>{ if(a===b)return; const d=hav(nodes[a],nodes[b]); if(!Number.isFinite(d)||d<.3)return; const f=routeFactor(props)*extra, kind=routeKind(props); adj[a].push({to:b,d,c:d*f,name,kind}); adj[b].push({to:a,d,c:d*f,name,kind}); };
+  localLineSources().forEach(line=>{ const c=line.coords.filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1])); if(c.length<2)return; let prev=nodeFor(c[0],true); for(let i=1;i<c.length;i++){const cur=nodeFor(c[i],i===c.length-1);edge(prev,cur,line.props,line.name);prev=cur;} });
+  // Une extremos casi coincidentes para tolerar redes Shape con pequeños desfases topológicos.
+  const grid=new Map(), cell=.00022; const key=p=>`${Math.floor(p[0]/cell)},${Math.floor(p[1]/cell)}`;
+  [...new Set(endpoints)].forEach(i=>{ const p=nodes[i], [a,b]=key(p).split(',').map(Number); for(let x=a-1;x<=a+1;x++)for(let y=b-1;y<=b+1;y++){const arr=grid.get(`${x},${y}`)||[]; for(const j of arr){const d=hav(p,nodes[j]); if(d<=18)edge(i,j,{},'Conexión topológica',1.25);} } const k=key(p); if(!grid.has(k))grid.set(k,[]);grid.get(k).push(i); });
+  return {nodes,adj};
+};
+class MinHeap{constructor(){this.a=[]} push(x){const a=this.a;a.push(x);let i=a.length-1;while(i){const p=(i-1)>>1;if(a[p][0]<=x[0])break;a[i]=a[p];i=p}a[i]=x} pop(){const a=this.a;if(!a.length)return null;const r=a[0],x=a.pop();if(a.length){let i=0;while(1){let l=i*2+1,rn=l+1;if(l>=a.length)break;let c=rn<a.length&&a[rn][0]<a[l][0]?rn:l;if(a[c][0]>=x[0])break;a[i]=a[c];i=c}a[i]=x}return r} get size(){return this.a.length}}
+const nearestGraphNode=(g,ll)=>{let bi=-1,bd=Infinity; for(let i=0;i<g.nodes.length;i++){const d=hav([ll.lat,ll.lng],g.nodes[i]);if(d<bd){bd=d;bi=i}}return {i:bi,d:bd};};
+const edgeKey=(a,b)=>a<b?`${a}:${b}`:`${b}:${a}`;
+const aStar=(g,start,end,penalty=new Map())=>{
+  const n=g.nodes.length, dist=new Float64Array(n);dist.fill(Infinity); const prev=new Int32Array(n);prev.fill(-1); const pq=new MinHeap();dist[start]=0;pq.push([0,start]);
+  while(pq.size){const [score,u]=pq.pop();const hu=hav(g.nodes[u],g.nodes[end]);if(score>dist[u]+hu+1)continue;if(u===end)break;for(const e of g.adj[u]){const nd=dist[u]+e.c*(1+(penalty.get(edgeKey(u,e.to))||0));if(nd<dist[e.to]){dist[e.to]=nd;prev[e.to]=u;pq.push([nd+hav(g.nodes[e.to],g.nodes[end]),e.to]);}}}
+  if(!Number.isFinite(dist[end]))return null;const ids=[];for(let u=end;u!==-1;u=prev[u]){ids.push(u);if(u===start)break;}if(ids.at(-1)!==start)return null;ids.reverse();return {ids,cost:dist[end]};
+};
+const routeDistance = coords => {let d=0;for(let i=1;i<coords.length;i++)d+=hav(coords[i-1],coords[i]);return d;};
+const localRoutes = (from,to) => {
+  const g=buildLocalGraph(); if(g.nodes.length<2)return []

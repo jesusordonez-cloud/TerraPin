@@ -1,0 +1,26 @@
+bd){bd=d;bi=i}}let rem=hav([ll.lat,ll.lng],r.coords[bi]);for(let i=bi+1;i<r.coords.length;i++)rem+=hav(r.coords[i-1],r.coords[i]);$('#routeRemain').textContent=fmtDist(rem);const eta=r.dur&&r.dist?Math.max(0,r.dur*(rem/r.dist)):null;$('#routeEta').textContent=eta?fmtTime(eta):'—';const status=$('#routeStatus');status.textContent=bd>120?'Fuera de ruta · conviene recalcular':(rem<35?'Destino muy cerca':'Navegación activa');status.classList.toggle('warn',bd>120);
+};
+const chooseRouteDialog = (routes,target) => {
+  const cards=routes.map((r,i)=>`<button class="route-option-card" data-pickroute="${r.id}"><span class="route-net ${r.source}">${r.source==='local'?'SIG':r.source==='osm'?'OSM':'↗'}</span><span class="grow"><b>${esc(r.label)}</b><small>${esc(r.detail||'')} · ${fmtDist(r.dist)}${r.dur?' · '+fmtTime(r.dur):''}</small></span><span>›</span></button>`).join('');
+  openModal(`<div class="modal-kicker">NAVEGACIÓN</div><h3>Ruta a ${esc(target.name||'punto')}</h3><p class="muted">Elige la red a utilizar. Las rutas SIG funcionan con las líneas cargadas en TerraPin; OSM requiere internet.</p><div class="route-option-list">${cards}</div><div class="actions"><button class="btn ghost" data-close>Cancelar</button></div>`);document.querySelectorAll('[data-pickroute]').forEach(b=>b.onclick=()=>{const r=routes.find(x=>x.id===b.dataset.pickroute);closeModal();activateRoute(r,target,routes);});
+};
+const routeToWaypoint = async w => {
+  toast('Calculando rutas…');try{const from=await ensureCurrentLocation();const [local,osm]=await Promise.all([Promise.resolve(localRoutes(from,L.latLng(w.lat,w.lng))),onlineRoutes(from,L.latLng(w.lat,w.lng))]);let routes=[...local,...osm];if(!routes.length)routes=[directRoute(from,L.latLng(w.lat,w.lng))];routes.sort((a,b)=>{if(a.source==='direct')return 1;if(b.source==='direct')return-1;return (a.dur||a.dist)-(b.dur||b.dist)});if(routes.length===1)activateRoute(routes[0],w,routes);else chooseRouteDialog(routes,w);}catch(e){console.error(e);toast('No se pudo obtener tu ubicación para navegar');}
+};
+$('#routeClose').onclick=closeNavigation;
+$('#routeRecalc').onclick=()=>{if(!S.nav)return;const t=S.nav.target;closeNavigation();routeToWaypoint(t);};
+
+/* ---------- grabación ---------- */'''
+assert anchor in app
+app=app.replace(anchor,nav_code)
+
+# Replace PDF share/print block with preview workflow
+start=app.index('const shareOrDownloadPdf = async projectId => {')
+end=app.index('\nconst projName =', start)
+pdf_new=r'''const previewReportBody = d => {
+  const rowsT=d.tracks.map(t=>{const st=trackStats(t);return `<div class="pdf-row"><i style="background:${esc(t.color)}"></i><div><b>${esc(t.name)}</b><span>${fmtDist(st.dist)} · ${fmtTime(st.dur)} · ${st.avg.toFixed(1)} km/h</span></div><small>${new Date(t.created).toLocaleDateString('es-MX')}</small></div>`}).join('')||'<div class="pdf-empty">Sin rutas registradas</div>';
+  const rowsW=d.waypoints.map(w=>`<div class="pdf-row"><em>${pointIconDef(w.icon).symbol}</em><div><b>${esc(w.name)}</b><span>${w.lat.toFixed(6)}, ${w.lng.toFixed(6)}${w.notes?' · '+esc(w.notes):''}</span></div></div>`).join('')||'<div class="pdf-empty">Sin puntos de campo</div>';
+  return `<div class="pdf-page"><div class="pdf-hero"><img src="icon-512.png"><div><strong>TerraPin</strong><b>${esc(d.title)}</b><span>Reporte de campo · ${esc(fmtDate(Date.now()))}</span></div></div><div class="pdf-kpis"><div><b>${d.tracks.length}</b><span>Rutas</span></div><div><b>${d.waypoints.length}</b><span>Puntos</span></div><div><b>${fmtDist(d.totalDist)}</b><span>Distancia</span></div><div><b>${fmtTime(d.totalTime)}</b><span>Tiempo</span></div></div><div class="pdf-map">${reportSvg(d.tracks,d.waypoints)}</div><h4>Rutas registradas</h4>${rowsT}<h4>Puntos de campo</h4>${rowsW}<footer>TerraPin · SIG de campo y navegación</footer></div>`;
+};
+const printPreviewData = d => {
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Reporte TerraPin</title><style>@page{size:A4;margin:12

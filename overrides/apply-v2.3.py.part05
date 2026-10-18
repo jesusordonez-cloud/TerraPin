@@ -1,0 +1,38 @@
+const renderSheet = () => { refreshProjectHud(); refreshMapHud();'
+assert old in app
+app=app.replace(old,new,1)
+
+# Init refresh before splash close
+old="""  setTimeout(() => $('#splash').classList.add('hide'), 900);"""
+new="""  refreshProjectHud(); refreshMapHud();
+  setTimeout(() => $('#splash').classList.add('hide'), 900);"""
+assert old in app
+app=app.replace(old,new)
+
+# Index DOM topbar replacement
+old='''<div class="topbar">\n  <div class="brand"><span class="logo"><img src="icon-192.png" alt=""></span><b>TerraPin</b></div>\n  <div class="search"><input id="q" placeholder="Buscar lugar o coordenadas" inputmode="search"><button id="qgo" aria-label="Buscar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button></div>\n  <button class="iconbtn" id="btnTheme" aria-label="Tema"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>\n</div>'''
+new='''<div class="topbar">\n  <div class="brand"><span class="logo"><img src="icon-192.png" alt=""></span><span class="brandcopy"><b>TerraPin</b><small id="projectHud">Sin proyecto activo</small></span></div>\n  <button class="iconbtn themebtn" id="btnTheme" aria-label="Tema"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>\n  <div class="search"><span class="searchlead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><input id="q" placeholder="Buscar sitio, coordenadas o referencia" inputmode="search"><button id="qgo" aria-label="Buscar"><span>Buscar</span></button></div>\n</div>'''
+assert old in idx
+idx=idx.replace(old,new)
+
+# Add route card + HUD before nav
+anchor='''<div class="infopanel" id="info"></div>\n\n<div class="sheet" id="sheet">'''
+new='''<div class="infopanel" id="info"></div>\n\n<div class="map-hud" id="mapHud"></div>\n\n<div class="route-card" id="routeCard">\n  <div class="route-top"><span class="route-arrow">↗</span><div class="grow"><small id="routeStatus">Navegación activa</small><b id="routeTitle">Destino</b><span id="routeSource">Red vial</span></div><button class="route-x" id="routeClose" aria-label="Finalizar">✕</button></div>\n  <div class="route-metrics"><div><b id="routeRemain">—</b><span>restante</span></div><div><b id="routeEta">—</b><span>tiempo est.</span></div><div><b id="routeDist">—</b><span>ruta total</span></div><button id="routeRecalc">Recalcular</button></div>\n  <div class="route-choices" id="routeChoices"></div>\n</div>\n\n<div class="sheet" id="sheet">'''
+assert anchor in idx
+idx=idx.replace(anchor,new)
+
+# Splash subtitle
+idx=idx.replace('<p>Mapas sin conexión y rutas GPS</p>','<p>SIG de campo · navegación · mapas sin conexión</p>')
+
+# Nav labels make more modern / explicit
+idx=idx.replace('>Proyectos</button>', '>Proyecto</button>',1)
+idx=idx.replace('>Sin conexión</button>', '>Offline</button>',1)
+idx=idx.replace('>Más</button>', '>Herramientas</button>',1)
+
+# Strong v2.3 CSS appended
+css=r'''
+
+/* ---------- TerraPin 2.3 · rediseño SIG visible ---------- */
+:root{--nav:#0f766e;--nav2:#14a394;--navInk:#0b2b25;--hud:rgba(9,31,27,.78)}
+.topbar{display:grid;grid-template-columns:1fr 46px;grid-template-areas:"brand theme" "search search";gap:8px;top:max(10px,env(safe-area-inset-top));left:10px;right:10px;padding:10px;border-radius:28px;background:linear-gradient(145deg,rgba(255,255,25,.94),rgba(241,250,247,.84));border:1px solid rgba(255,255,255,.76);box-shadow:0 18px 55px rgba(8,55,45,.18);backdrop-filter:blur(28px) saturate(170%);-webkit-backdrop-filter:blur(28px) saturate(170%)}
+[data-theme="dark"] .topbar{background:linear-gradient(145deg,rgba(21,43,36,.96)

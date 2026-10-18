@@ -1,0 +1,26 @@
+;
+  const a=nearestGraphNode(g,from),b=nearestGraphNode(g,to); if(a.i<0||b.i<0||a.d>2200||b.d>2200)return [];
+  const penalty=new Map(), out=[]; for(let k=0;k<3;k++){const r=aStar(g,a.i,b.i,penalty);if(!r)break;const core=r.ids.map(i=>g.nodes[i]);const coords=[[from.lat,from.lng],...core,[to.lat,to.lng]];const sig=r.ids.join('-');if(out.some(x=>x.sig===sig))break;const dist=routeDistance(coords), dur=dist/(25/3.6); out.push({id:'local-'+k,source:'local',label:k?'Red SIG · alternativa '+(k+1):'Red SIG local',detail:`${localLineSources().length} líneas cargadas`,coords,dist,dur,sig,snap:a.d+b.d}); for(let i=1;i<r.ids.length;i++){const ek=edgeKey(r.ids[i-1],r.ids[i]);penalty.set(ek,(penalty.get(ek)||0)+.75);} }
+  return out;
+};
+const onlineRoutes = async (from,to) => {
+  if(!navigator.onLine)return [];
+  const u=`https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?alternatives=3&steps=true&geometries=geojson&overview=full`;
+  try{const r=await fetch(u);if(!r.ok)return[];const j=await r.json();if(j.code!=='Ok'||!j.routes?.length)return[];return j.routes.map((q,i)=>({id:'osm-'+i,source:'osm',label:i?'Calles OSM · alternativa '+(i+1):'Calles OSM',detail:i?'Ruta vial alternativa':'Ruta recomendada por la red OSM',coords:q.geometry.coordinates.map(c=>[c[1],c[0]]),dist:q.distance,dur:q.duration,steps:(q.legs||[]).flatMap(l=>l.steps||[])}));}catch(e){console.warn('OSRM',e);return[];}
+};
+const directRoute = (from,to) => ({id:'direct',source:'direct',label:'Orientación directa',detail:'Sin red vial disponible',coords:[[from.lat,from.lng],[to.lat,to.lng]],dist:hav([from.lat,from.lng],[to.lat,to.lng]),dur:null});
+const ensureCurrentLocation = () => new Promise((res,rej)=>{if(S.me)return res(S.me);if(!navigator.geolocation)return rej(new Error('GPS no disponible'));navigator.geolocation.getCurrentPosition(p=>{onPos(p);res(S.me)},rej,{enableHighAccuracy:true,timeout:25000,maximumAge:5000});});
+const navRouteStyle = r => r.source==='direct'?{color:'#F59E0B',weight:5,dashArray:'8 8'}:{color:'#18A999',weight:7};
+const activateRoute = (route,target,routes) => {
+  if(S.navLayer)map.removeLayer(S.navLayer);const g=L.layerGroup().addTo(map);const style=navRouteStyle(route);g.addLayer(L.polyline(route.coords,{color:'#fff',weight:style.weight+6,opacity:.88,lineCap:'round'}));g.addLayer(L.polyline(route.coords,{...style,opacity:.96,lineCap:'round'}));g.addLayer(L.circleMarker([target.lat,target.lng],{radius:8,color:'#fff',weight:3,fillColor:'#18A999',fillOpacity:1}));S.navLayer=g;S.nav={target,route,routes};renderRouteCard();const b=L.latLngBounds(route.coords);if(b.isValid())map.fitBounds(b,{paddingTopLeft:[28,150],paddingBottomRight:[28,190]});startGPS();updateNavigationProgress(S.me||L.latLng(route.coords[0]));
+};
+const closeNavigation = () => {if(S.navLayer){map.removeLayer(S.navLayer);S.navLayer=null;}S.nav=null;navCard.classList.remove('open');};
+const switchRoute = id => {if(!S.nav)return;const r=S.nav.routes.find(x=>x.id===id);if(r)activateRoute(r,S.nav.target,S.nav.routes);};
+const renderRouteCard = () => {
+  if(!S.nav)return navCard.classList.remove('open');const {route,target,routes}=S.nav;navCard.classList.add('open');
+  $('#routeTitle').textContent=target.name||'Destino';$('#routeSource').textContent=route.label;$('#routeDist').textContent=fmtDist(route.dist);$('#routeEta').textContent=route.dur?fmtTime(route.dur):'—';$('#routeRemain').textContent=fmtDist(route.dist);
+  $('#routeChoices').innerHTML=routes.map(r=>`<button class="route-choice ${r.id===route.id?'active':''}" data-route="${r.id}"><b>${esc(r.label)}</b><span>${fmtDist(r.dist)}${r.dur?' · '+fmtTime(r.dur):''}</span></button>`).join('');
+  $('#routeChoices').querySelectorAll('[data-route]').forEach(b=>b.onclick=()=>switchRoute(b.dataset.route));
+};
+const updateNavigationProgress = ll => {
+  if(!S.nav||!ll)return;const r=S.nav.route;let bi=0,bd=Infinity;for(let i=0;i<r.coords.length;i++){const d=hav([ll.lat,ll.lng],r.coords[i]);if(d<

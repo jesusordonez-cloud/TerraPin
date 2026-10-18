@@ -1,0 +1,64 @@
+from pathlib import Path
+import re, shutil, json
+
+import sys
+root = Path(sys.argv[1] if len(sys.argv)>1 else 'terrapin')
+app_p = root/'app.js'; idx_p=root/'index.html'; pkg_p=root/'package.json'; man_p=root/'manifest.json'
+app=app_p.read_text(); idx=idx_p.read_text(); pkg=pkg_p.read_text(); man=man_p.read_text()
+
+# Version labels
+app=app.replace('/* TerraPin 2.2 — mapas sin conexión, rutas GPS, Shape y proyectos', '/* TerraPin 2.3 — SIG de campo, navegación híbrida, mapas offline y proyectos')
+pkg=pkg.replace('"version": "2.2.0"','"version": "2.3.0"')
+# manifest may or may not contain version; improve description if present
+man=man.replace('Mapas sin conexión, rutas GPS y proyectos', 'SIG de campo con navegación, mapas sin conexión, rutas GPS y proyectos')
+
+# State: navigation mode
+old="""  layers: {}, trackLayers: {}, vectorLayers: {}, wpLayers: {}, panes: {},
+  tab: null, sel: null, measure: null, rec: null, me: null, follow: false, watchId: null
+};"""
+new="""  layers: {}, trackLayers: {}, vectorLayers: {}, wpLayers: {}, panes: {},
+  tab: null, sel: null, measure: null, rec: null, me: null, follow: false, watchId: null,
+  nav: null, navLayer: null
+};"""
+assert old in app
+app=app.replace(old,new)
+
+# Waypoint popup: add navigation button
+old="""    m.bindPopup(() => `<div style="font-size:20px;margin-bottom:3px">${d.symbol}</div><b>${esc(w.name)}</b><br>${esc(w.notes || '')}<br><span style="color:#777">${w.lat.toFixed(5)}, ${w.lng.toFixed(5)}</span><br><a href="#" data-wp="${w.id}">Editar</a>`);
+    m.on('popupopen', e => { e.popup.getElement().querySelector('[data-wp]').onclick = ev => { ev.preventDefault(); editWaypoint(w); }; });"""
+new="""    m.bindPopup(() => `<div class="wp-popup"><div class="wp-popup-icon">${d.symbol}</div><b>${esc(w.name)}</b><div class="wp-popup-notes">${esc(w.notes || '')}</div><div class="wp-popup-coord">${w.lat.toFixed(5)}, ${w.lng.toFixed(5)}</div><div class="wp-popup-actions"><button type="button" class="wp-nav" data-navwp="${w.id}">Ir aquí</button><button type="button" class="wp-edit" data-wp="${w.id}">Editar</button></div></div>`);
+    m.on('popupopen', e => { const el=e.popup.getElement(); const ed=el.querySelector('[data-wp]'); const go=el.querySelector('[data-navwp]'); if(ed)ed.onclick = ev => { ev.preventDefault(); editWaypoint(w); }; if(go)go.onclick = ev => { ev.preventDefault(); map.closePopup(); routeToWaypoint(w); }; });"""
+assert old in app
+app=app.replace(old,new)
+
+# Update GPS onPos with nav updates
+old="""  if (S.follow) map.panTo(ll, { animate: true, duration: .4 });
+  if (S.rec) recPoint(p);
+  $('#sAcc').textContent = '±' + Math.round(p.coords.accuracy) + ' m';"""
+new="""  if (S.follow) map.panTo(ll, { animate: true, duration: .4 });
+  if (S.rec) recPoint(p);
+  if (S.nav) updateNavigationProgress(S.me);
+  $('#sAcc').textContent = '±' + Math.round(p.coords.accuracy) + ' m';
+  refreshMapHud();"""
+assert old in app
+app=app.replace(old,new)
+
+# Insert navigation engine after map dragstart before recording
+anchor="""map.on('dragstart', () => { if (S.follow) { S.follow = false; $('#btnLocate').classList.remove('active'); } });
+
+/* ---------- grabación ---------- */"""
+nav_code=r'''map.on('dragstart', () => { if (S.follow) { S.follow = false; $('#btnLocate').classList.remove('active'); } });
+
+/* ---------- navegación híbrida: OSM + red SIG local ---------- */
+const navCard = $('#routeCard');
+const routeClass = p => String(p?.highway || p?.tipo || p?.TIPO || p?.clase || p?.CLASE || p?.surface || p?.SURFACE || p?.name || '').toLowerCase();
+const routeFactor = p => {
+  const s=routeClass(p);
+  if (/motorway|trunk|primary|secondary|paviment|asphalt|asfalto|carretera/.test(s)) return .98;
+  if (/calle|residential|tertiary|road|avenida/.test(s)) return 1;
+  if (/gravel|terracer|unpaved|tierra|rural/.test(s)) return 1.08;
+  if (/track|saca.?cosecha|brecha|forestal|service/.test(s)) return 1.14;
+  if (/path|trail|sendero|vereda/.test(s)) return 1.24;
+  return 1.05;
+};
+const route

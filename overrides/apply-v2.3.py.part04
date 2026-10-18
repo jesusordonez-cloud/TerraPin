@@ -1,0 +1,26 @@
+mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#15251f;margin:0}.pdf-page{width:100%}.pdf-hero{background:#0f766e;color:#fff;border-radius:18px;padding:16px;display:flex;gap:15px;align-items:center}.pdf-hero img{width:60px;height:60px;background:#fff;border-radius:15px;object-fit:contain}.pdf-hero strong{font-size:25px;display:block}.pdf-hero b,.pdf-hero span{display:block;margin-top:3px}.pdf-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}.pdf-kpis div{background:#f0f7f5;border-radius:12px;padding:10px}.pdf-kpis b{display:block;color:#0f766e;font-size:17px}.pdf-kpis span{font-size:10px;color:#61736c}.pdf-map svg{width:100%;height:auto}.pdf-row{display:flex;align-items:center;gap:8px;border-bottom:1px solid #e5ece9;padding:7px 2px}.pdf-row i{width:4px;height:25px;border-radius:4px}.pdf-row em{font-style:normal;font-size:17px}.pdf-row div{flex:1}.pdf-row b,.pdf-row span{display:block}.pdf-row span,.pdf-row small{font-size:9px;color:#687871}h4{margin:16px 0 4px}footer{border-top:1px solid #e5ece9;margin-top:18px;padding-top:7px;font-size:8px;color:#7b8983}</style></head><body>${previewReportBody(d)}</body></html>`;
+  const f=document.createElement('iframe');f.style.cssText='position:fixed;width:1px;height:1px;right:0;bottom:0;border:0;opacity:0';document.body.appendChild(f);f.srcdoc=html;f.onload=()=>setTimeout(()=>{try{f.contentWindow.focus();f.contentWindow.print()}catch{}setTimeout(()=>f.remove(),3000)},300);
+};
+const savePdfFile = async (doc,filename) => {const blob=doc.output('blob');const file=typeof File!=='undefined'?new File([blob],filename,{type:'application/pdf'}):null;if(file&&navigator.share&&navigator.canShare?.({files:[file]})){await navigator.share({title:'Reporte TerraPin',text:'Reporte de campo generado en TerraPin',files:[file]});}else{downloadBlob(filename,blob);toast('PDF guardado');}};
+const previewReportPdf = async (projectId,preferPrint=false) => {
+  try{const {doc,data,filename}=await createReportPdf(projectId);openModal(`<div class="modal-kicker">VISTA PREVIA</div><div class="preview-head"><div><h3>Reporte PDF</h3><p>Revisa el documento antes de guardarlo o imprimirlo.</p></div><span class="format-pill">A4 · PDF</span></div><div class="pdf-preview-wrap">${previewReportBody(data)}</div><div class="actions preview-actions"><button class="btn ghost" data-close>Cerrar</button><button class="btn ghost" id="pdfPrint">Imprimir</button><button class="btn" id="pdfSave">Guardar PDF</button></div>`);$('#pdfSave').onclick=async()=>{await savePdfFile(doc,filename)};$('#pdfPrint').onclick=()=>printPreviewData(data);if(preferPrint)setTimeout(()=>$('#pdfPrint')?.focus(),80);}catch(e){console.error(e);toast('No se pudo generar la vista previa del PDF');}
+};
+const shareOrDownloadPdf = projectId => previewReportPdf(projectId,false);
+const printReport = projectId => previewReportPdf(projectId,true);
+'''
+app=app[:start]+pdf_new+app[end:]
+
+# Add HUD refresh near proj helpers
+anchor="""const folderName = id => S.folders.find(f => f.id === id)?.name || 'General';
+const promptName ="""
+hud="""const folderName = id => S.folders.find(f => f.id === id)?.name || 'General';
+const refreshProjectHud = () => { const p=S.projects.find(x=>x.id===S.settings.activeProject); const el=$('#projectHud'); if(el)el.textContent=p?`Proyecto · ${p.name}`:'Sin proyecto activo'; };
+const refreshMapHud = () => { const c=map.getCenter(), el=$('#mapHud'); if(!el)return; const net=navigator.onLine?'ONLINE':'OFFLINE'; const gps=S.me?'GPS':'SIN GPS'; el.innerHTML=`<span>${c.lat.toFixed(5)}, ${c.lng.toFixed(5)|</span><b>z${map.getZoom()}</b><i class="${navigator.onLine?'on':''}">${net}</i><i class="${S.me?'on':''}">${gps}</i>`; };
+map.on('moveend zoomend',refreshMapHud);window.addEventListener('online',refreshMapHud);window.addEventListener('offline',refreshMapHud);
+const promptName ="""
+assert anchor in app
+app=app.replace(anchor,hud)
+
+# Refresh HUD when sheet renders
+old='const renderSheet = () => {'
+new='

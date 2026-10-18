@@ -1,0 +1,8 @@
+argin:12px 0 3px}.pdf-row{display:flex;align-items:center;gap:7px;border-bottom:1px solid #e8eeeb;padding:6px 1px}.pdf-row i{width:3px;height:22px;border-radius:4px}.pdf-row em{font-style:normal;font-size:15px}.pdf-row div{flex:1}.pdf-row b,.pdf-row span{display:block}.pdf-row b{font-size:8px}.pdf-row span,.pdf-row small{font-size:7px;color:#6e7d77}.pdf-empty{font-size:8px;color:#7b8983;padding:7px}.pdf-page footer{border-top:1px solid #e8eeeb;padding-top:6px;margin-top:13px;font-size:7px;color:#7b8983}.preview-actions{position:sticky;bottom:-2px;background:linear-gradient(to top,var(--panel) 72%,transparent);padding-top:10px}
+@media(min-width:700px){.topbar{left:50%;right:auto;transform:translateX(-50%);width:min(720px,calc(100vw - 32px))}.route-card{left:50%;right:auto;transform:translateX(-50%);width:min(690px,calc(100vw - 32px))}.map-hud{left:calc(50% - 325px)}}
+'''
+idx=idx.replace('\n</style>',css+'\n</style>')
+
+# Write
+app_p.write_text(app); idx_p.write_text(idx); pkg_p.write_text(pkg); man_p.write_text(man)
+print('patched', len(app), len(idx))
