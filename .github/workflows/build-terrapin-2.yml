@@ -1,4 +1,4 @@
-name: Compilar TerraPin 2.4 Capacitor
+name: Compilar TerraPin 2.5 Capacitor
 
 on:
   push:
@@ -88,6 +88,21 @@ jobs:
           grep -q 'data-tab="points"' terrapin/index.html
           grep -q 'terrapin-shell-v2.4' terrapin/sw.js
 
+      - name: Aplicar navegación off-road, mapa PDF y rediseño TerraPin 2.5
+        run: |
+          set -euxo pipefail
+          cp overrides/apply-v2.5.py.gz /tmp/apply-v2.5.py.gz
+          echo "cc882f0b6d0b72462ae0dfb1791b340358f1699174a51a6ca9b7dfe9d7180469  /tmp/apply-v2.5.py.gz" | sha256sum -c -
+          gunzip -c /tmp/apply-v2.5.py.gz > /tmp/apply-v2.5.py
+          echo "5ce7af50a74cec0d8fd7d13a6120ad626241b5e1ea8674f83508f1a9b69beaf1  /tmp/apply-v2.5.py" | sha256sum -c -
+          python -m py_compile /tmp/apply-v2.5.py
+          python /tmp/apply-v2.5.py terrapin
+          grep -q '"version": "2.5.0"' terrapin/package.json
+          grep -q 'tramo directo final' terrapin/app.js
+          grep -q 'CARTOGRAFÍA DE CAMPO' terrapin/app.js
+          grep -q 'FIELD GIS 2.5' terrapin/index.html
+          grep -q 'terrapin-shell-v2.5' terrapin/sw.js
+
       - name: Node 20
         uses: actions/setup-node@v4
         with:
@@ -107,7 +122,7 @@ jobs:
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      - name: Validar TerraPin 2.4 e instalar dependencias GIS
+      - name: Validar TerraPin 2.5 e instalar dependencias GIS
         working-directory: terrapin
         run: |
           set -euxo pipefail
@@ -128,6 +143,10 @@ jobs:
           grep -q 'Navegar desde mi ubicación' www/index.html
           grep -q 'data-tab="points"' www/index.html
           grep -q 'terrapin-shell-v2.4' www/sw.js
+          grep -q 'tramo directo final' www/app.js
+          grep -q 'CARTOGRAFÍA DE CAMPO' www/app.js
+          grep -q 'FIELD GIS 2.5' www/index.html
+          grep -q 'terrapin-shell-v2.5' www/sw.js
 
       - name: Crear proyecto Android
         working-directory: terrapin
@@ -184,24 +203,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Preparar fuente TerraPin 2.4
+      - name: Preparar fuente TerraPin 2.5
         run: |
           set -euxo pipefail
-          rm -f TerraPin-2.4-source.zip
-          zip -qr TerraPin-2.4-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
-          test -s TerraPin-2.4-source.zip
-          sha256sum TerraPin-2.4-source.zip
+          rm -f TerraPin-2.5-source.zip
+          zip -qr TerraPin-2.5-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
+          test -s TerraPin-2.5-source.zip
+          sha256sum TerraPin-2.5-source.zip
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.4-apk
+          name: TerraPin-2.5-apk
           path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publicar fuente 2.4
+      - name: Publicar fuente 2.5
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.4-source
-          path: TerraPin-2.4-source.zip
+          name: TerraPin-2.5-source
+          path: TerraPin-2.5-source.zip
           if-no-files-found: error
