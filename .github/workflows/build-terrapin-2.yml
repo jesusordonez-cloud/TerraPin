@@ -262,7 +262,7 @@ jobs:
           echo "01d1e1cc9e415a72ef195298812a53d9cf8ee296debc9b5eb9d8b3367c8865b7  /tmp/terrapin-v3.4.patch.gz" | sha256sum -c -
           gunzip -c /tmp/terrapin-v3.4.patch.gz > /tmp/terrapin-v3.4.patch
           echo "9943aff9bc022bf1e0f800fa8ebffc62df1c37323a2390b510b8e628d411160b  /tmp/terrapin-v3.4.patch" | sha256sum -c -
-          patch --batch -p1 -d terrapin < /tmp/terrapin-v3.4.patch
+          patch --batch -p4 -d terrapin < /tmp/terrapin-v3.4.patch
           grep -q '"version": "3.4.0"' terrapin/package.json
           grep -q 'FIELD GIS <b>3.4</b>' terrapin/index.html
           grep -q 'TerraPin 3.4 · COMPACT MAP-FIRST UI' terrapin/index.html
