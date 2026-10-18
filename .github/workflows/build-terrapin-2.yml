@@ -217,8 +217,6 @@ jobs:
           grep -q 'hud-cell' www/app.js
           grep -q 'btnLayersQuick' www/index.html
           grep -q 'drawPdfLegendCompact' www/app.js
-          grep -q 'FIELD GIS 2.8' www/index.html
-          grep -q 'terrapin-shell-v2.8' www/sw.js
           grep -q 'layoutFloatingChrome' www/app.js
           grep -q 'buildReportBasemap' www/app.js
           grep -q 'FIELD GIS <b>2.9</b>' www/index.html
