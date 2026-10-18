@@ -1,4 +1,4 @@
-name: Compilar TerraPin 2.6 Capacitor
+name: Compilar TerraPin 2.7 Capacitor
 
 on:
   push:
@@ -119,6 +119,22 @@ jobs:
           grep -q 'FIELD GIS 2.6' terrapin/index.html
           grep -q 'terrapin-shell-v2.6' terrapin/sw.js
 
+      - name: Aplicar Premium Crystal y editor visible TerraPin 2.7
+        run: |
+          set -euxo pipefail
+          cp overrides/apply-v2.7.py.gz /tmp/apply-v2.7.py.gz
+          echo "5be3d77d8662264ed0df332f27aede25937eab97f3c0ee939fd1996233e78aad  /tmp/apply-v2.7.py.gz" | sha256sum -c -
+          gunzip -c /tmp/apply-v2.7.py.gz > /tmp/apply-v2.7.py
+          echo "2cf28680b33befb01c43d1e9d226e31056979bcab1162e1ea22e4cc0401c7406  /tmp/apply-v2.7.py" | sha256sum -c -
+          python -m py_compile /tmp/apply-v2.7.py
+          python /tmp/apply-v2.7.py terrapin
+          grep -q '"version": "2.7.0"' terrapin/package.json
+          grep -q 'PREMIUM CRYSTAL' terrapin/index.html
+          grep -q 'RUTA SELECCIONADA' terrapin/app.js
+          grep -q 'composition-stage' terrapin/index.html
+          grep -q 'fitCompositionPreview' terrapin/app.js
+          grep -q 'terrapin-shell-v2.7' terrapin/sw.js
+
       - name: Node 20
         uses: actions/setup-node@v4
         with:
@@ -138,7 +154,7 @@ jobs:
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      - name: Validar TerraPin 2.6 e instalar dependencias GIS
+      - name: Validar TerraPin 2.7 e instalar dependencias GIS
         working-directory: terrapin
         run: |
           set -euxo pipefail
@@ -163,8 +179,11 @@ jobs:
           grep -q 'pdf-editable' www/index.html
           grep -q 'Elaborado por' www/app.js
           grep -q 'reportLegendLabels' www/app.js
-          grep -q 'FIELD GIS 2.6' www/index.html
-          grep -q 'terrapin-shell-v2.6' www/sw.js
+          grep -q 'PREMIUM CRYSTAL' www/index.html
+          grep -q 'RUTA SELECCIONADA' www/app.js
+          grep -q 'composition-stage' www/index.html
+          grep -q 'fitCompositionPreview' www/app.js
+          grep -q 'terrapin-shell-v2.7' www/sw.js
 
       - name: Crear proyecto Android
         working-directory: terrapin
@@ -221,24 +240,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Preparar fuente TerraPin 2.6
+      - name: Preparar fuente TerraPin 2.7
         run: |
           set -euxo pipefail
-          rm -f TerraPin-2.6-source.zip
-          zip -qr TerraPin-2.6-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
-          test -s TerraPin-2.6-source.zip
-          sha256sum TerraPin-2.6-source.zip
+          rm -f TerraPin-2.7-source.zip
+          zip -qr TerraPin-2.7-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
+          test -s TerraPin-2.7-source.zip
+          sha256sum TerraPin-2.7-source.zip
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.6-apk
+          name: TerraPin-2.7-apk
           path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publicar fuente 2.6
+      - name: Publicar fuente 2.7
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-2.6-source
-          path: TerraPin-2.6-source.zip
+          name: TerraPin-2.7-source
+          path: TerraPin-2.7-source.zip
           if-no-files-found: error
