@@ -192,7 +192,7 @@ jobs:
           echo "e8c9d7ab006f49a3fc6bd6e9e1b5c6992e41721cdbb8fc2bb56659240d41e4c4  /tmp/terrapin-v3.1.patch.gz" | sha256sum -c -
           gunzip -c /tmp/terrapin-v3.1.patch.gz > /tmp/terrapin-v3.1.patch
           echo "62debc5f2aebb85036b71a19868ee990df6d6011fef7defd47b412403d6d40e3  /tmp/terrapin-v3.1.patch" | sha256sum -c -
-          patch -p1 -d terrapin < /tmp/terrapin-v3.1.patch
+          patch --batch -p6 -d terrapin < /tmp/terrapin-v3.1.patch
           grep -q '"version": "3.1.0"' terrapin/package.json
           grep -q 'FIELD GIS <b>3.1</b>' terrapin/index.html
           grep -q 'composition-drawer-toggle' terrapin/index.html
