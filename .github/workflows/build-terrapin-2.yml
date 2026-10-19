@@ -1,4 +1,4 @@
-name: Compilar TerraPin 3.4 Capacitor
+name: Compilar TerraPin 3.5 Capacitor
 
 on:
   push:
@@ -272,6 +272,25 @@ jobs:
           grep -q 'terrapin-shell-v3.4' terrapin/sw.js
           ! grep -q 'id="basemapQuick"' terrapin/index.html
 
+      - name: Aplicar TerraPin 3.5 capas, rutas y usuarios
+        run: |
+          set -euxo pipefail
+          cat overrides/apply-v3.5.patch.gz.b64.part* | base64 --decode > /tmp/terrapin-v3.5.patch.gz
+          echo "e5e1c53059f61d91d2a24ef16d792579a99c00556e9526e725b0141f349be048  /tmp/terrapin-v3.5.patch.gz" | sha256sum -c -
+          gunzip -c /tmp/terrapin-v3.5.patch.gz > /tmp/terrapin-v3.5.patch
+          echo "dd1e434134525aa06fb199533f7569700f7aab962c11c65ab82c88e2607eeb28  /tmp/terrapin-v3.5.patch" | sha256sum -c -
+          patch --batch -p1 -d terrapin < /tmp/terrapin-v3.5.patch
+          node --check terrapin/app.js
+          grep -q '"version": "3.5.0"' terrapin/package.json
+          grep -q 'FIELD GIS <b>3.5</b>' terrapin/index.html
+          grep -q 'sheet-scroll-hint' terrapin/index.html
+          grep -q 'Iniciar grabación' terrapin/app.js
+          grep -q 'tPauseRec' terrapin/app.js
+          grep -q 'firstAdminGate' terrapin/app.js
+          grep -q 'PBKDF2' terrapin/app.js
+          grep -q 'openUserManager' terrapin/app.js
+          grep -q 'terrapin-shell-v3.5' terrapin/sw.js
+
       - name: Node 20
         uses: actions/setup-node@v4
         with:
@@ -291,7 +310,7 @@ jobs:
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      - name: Validar TerraPin 3.4 e instalar dependencias GIS
+      - name: Validar TerraPin 3.5 e instalar dependencias GIS
         working-directory: terrapin
         run: |
           set -euxo pipefail
@@ -315,6 +334,12 @@ jobs:
           grep -q '.bottom-stack .nav{height:72px!important' www/index.html
           grep -q '.fabcol .iconbtn{width:54px!important;height:51px!important' www/index.html
           grep -q -- '--tp34-stack-clear' www/app.js
+          grep -q 'sheet-scroll-hint' www/index.html
+          grep -q 'Iniciar grabación' www/app.js
+          grep -q 'tPauseRec' www/app.js
+          grep -q 'firstAdminGate' www/app.js
+          grep -q 'PBKDF2' www/app.js
+          grep -q 'openUserManager' www/app.js
           grep -q 'routeToWaypoint' www/app.js
           grep -q 'previewReportPdf' www/app.js
           grep -q 'route-card' www/index.html
@@ -340,9 +365,9 @@ jobs:
           grep -q 'map-widget legend-widget' www/app.js
           grep -q 'reportLayout' www/app.js
           grep -q 'reportMapStyle' www/app.js
-          grep -q 'FIELD GIS <b>3.4</b>' www/index.html
+          grep -q 'FIELD GIS <b>3.5</b>' www/index.html
           grep -q 'TerraPin 3.2 · single bottom flow' www/index.html
-          grep -q 'terrapin-shell-v3.4' www/sw.js
+          grep -q 'terrapin-shell-v3.5' www/sw.js
           grep -q 'composition-drawer-toggle' www/index.html
           grep -q 'spMore' www/app.js
           grep -q 'infoMore' www/app.js
@@ -412,24 +437,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Preparar fuente TerraPin 3.4
+      - name: Preparar fuente TerraPin 3.5
         run: |
           set -euxo pipefail
-          rm -f TerraPin-3.4-source.zip
-          zip -qr TerraPin-3.4-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
-          test -s TerraPin-3.4-source.zip
-          sha256sum TerraPin-3.4-source.zip
+          rm -f TerraPin-3.5-source.zip
+          zip -qr TerraPin-3.5-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
+          test -s TerraPin-3.5-source.zip
+          sha256sum TerraPin-3.5-source.zip
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-3.4-apk
+          name: TerraPin-3.5-apk
           path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publicar fuente 3.4
+      - name: Publicar fuente 3.5
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-3.4-source
-          path: TerraPin-3.4-source.zip
+          name: TerraPin-3.5-source
+          path: TerraPin-3.5-source.zip
           if-no-files-found: error
