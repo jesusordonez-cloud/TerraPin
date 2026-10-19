@@ -1,0 +1,44 @@
+name: Import TerraPin 4.2 patch
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - ".update42/**"
+      - ".github/workflows/import-terrapin-42.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Aplicar parche exacto TerraPin 4.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .update42/p* | base64 -d > /tmp/terrapin42.patch.gz
+          echo "415afbff47b1eae84b20b414ae1f8656bbbcf37cb2de0a05f01fe1c4a518950c  /tmp/terrapin42.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/terrapin42.patch.gz > /tmp/terrapin42.patch
+          patch -p5 < /tmp/terrapin42.patch
+
+          test "$(git hash-object GUIA-COPERNICUS.md)" = "e4724ebd385a602c795bdf28c1e99b89efa0de56"
+          test "$(git hash-object LEEME.md)" = "6b93c9f7c7b50a5f7adf4be8cf830346fa1ca3d1"
+          test "$(git hash-object www/app.js)" = "a3238f80789b8e9abfa9ed081bcfbcf14e42ce82"
+          test "$(git hash-object www/index.html)" = "217322950d43c1e94e46859aed9db1734f1a227b"
+          test "$(git hash-object www/sw.js)" = "9a419f71b81c3ce6725ff907949d604fecaed820"
+
+      - name: Guardar TerraPin 4.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add GUIA-COPERNICUS.md LEEME.md www/app.js www/index.html www/sw.js
+          git commit -m "Update TerraPin application to 4.2"
+          git push origin HEAD:main
