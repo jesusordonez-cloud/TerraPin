@@ -34,6 +34,7 @@ TerraPin 0.5.9 incorpora una capa satelital opcional que se superpone al mapa si
 - La capa puede activarse, ocultarse y ajustar su opacidad desde el selector de imágenes.
 - Los caminos, límites, puntos, recorridos y rutas de TerraPin permanecen visibles sobre la imagen.
 - No se presenta como video en tiempo real; la aplicación consulta la imagen más reciente disponible del proveedor.
+- La función se integra como overlay independiente y conserva visibles las capas operativas de TerraPin.
 
 ## Compatibilidad
 
