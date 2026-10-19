@@ -298,7 +298,7 @@ jobs:
           echo "ba8701e72c341fce3447e9457cb28e6bb373b72627db8d12e15939ee6c4682a0  /tmp/terrapin-v3.6.patch.gz" | sha256sum -c -
           gunzip -c /tmp/terrapin-v3.6.patch.gz > /tmp/terrapin-v3.6.patch
           echo "4d4dc2454ce04e5923b8ef991e39d251eb5aa40c1d92d9d9dc4d592cafeaec84  /tmp/terrapin-v3.6.patch" | sha256sum -c -
-          patch --batch -p4 -d terrapin < /tmp/terrapin-v3.6.patch
+          patch --batch -p5 -d terrapin < /tmp/terrapin-v3.6.patch
           node --check terrapin/app.js
           grep -q '"version": "3.6.0"' terrapin/package.json
           grep -q 'FIELD GIS <b>3.6</b>' terrapin/index.html
