@@ -1,4 +1,4 @@
-name: Compilar TerraPin 3.5 Capacitor
+name: Compilar TerraPin 3.6 Capacitor
 
 on:
   push:
@@ -291,6 +291,25 @@ jobs:
           grep -q 'openUserManager' terrapin/app.js
           grep -q 'terrapin-shell-v3.5' terrapin/sw.js
 
+      - name: Aplicar TerraPin 3.6 observación satelital NASA NOAA
+        run: |
+          set -euxo pipefail
+          cat overrides/apply-v3.6.patch.gz.b64 | base64 --decode > /tmp/terrapin-v3.6.patch.gz
+          echo "ba8701e72c341fce3447e9457cb28e6bb373b72627db8d12e15939ee6c4682a0  /tmp/terrapin-v3.6.patch.gz" | sha256sum -c -
+          gunzip -c /tmp/terrapin-v3.6.patch.gz > /tmp/terrapin-v3.6.patch
+          echo "4d4dc2454ce04e5923b8ef991e39d251eb5aa40c1d92d9d9dc4d592cafeaec84  /tmp/terrapin-v3.6.patch" | sha256sum -c -
+          patch --batch -p4 -d terrapin < /tmp/terrapin-v3.6.patch
+          node --check terrapin/app.js
+          grep -q '"version": "3.6.0"' terrapin/package.json
+          grep -q 'FIELD GIS <b>3.6</b>' terrapin/index.html
+          grep -q 'GOES-East_ABI_GeoColor' terrapin/app.js
+          grep -q 'GOES-East_ABI_FireTemp' terrapin/app.js
+          grep -q 'VIIRS_NOAA21_CorrectedReflectance_TrueColor' terrapin/app.js
+          grep -q 'HLS_S30_Nadir_BRDF_Adjusted_Reflectance' terrapin/app.js
+          grep -q 'startSatelliteAnimation' terrapin/app.js
+          grep -q 'satellite-hub' terrapin/index.html
+          grep -q 'terrapin-shell-v3.6' terrapin/sw.js
+
       - name: Node 20
         uses: actions/setup-node@v4
         with:
@@ -310,7 +329,7 @@ jobs:
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      - name: Validar TerraPin 3.5 e instalar dependencias GIS
+      - name: Validar TerraPin 3.6 e instalar dependencias GIS
         working-directory: terrapin
         run: |
           set -euxo pipefail
@@ -340,6 +359,12 @@ jobs:
           grep -q 'firstAdminGate' www/app.js
           grep -q 'PBKDF2' www/app.js
           grep -q 'openUserManager' www/app.js
+          grep -q 'GOES-East_ABI_GeoColor' www/app.js
+          grep -q 'GOES-East_ABI_FireTemp' www/app.js
+          grep -q 'VIIRS_NOAA21_CorrectedReflectance_TrueColor' www/app.js
+          grep -q 'HLS_S30_Nadir_BRDF_Adjusted_Reflectance' www/app.js
+          grep -q 'startSatelliteAnimation' www/app.js
+          grep -q 'satellite-hub' www/index.html
           grep -q 'routeToWaypoint' www/app.js
           grep -q 'previewReportPdf' www/app.js
           grep -q 'route-card' www/index.html
@@ -365,9 +390,9 @@ jobs:
           grep -q 'map-widget legend-widget' www/app.js
           grep -q 'reportLayout' www/app.js
           grep -q 'reportMapStyle' www/app.js
-          grep -q 'FIELD GIS <b>3.5</b>' www/index.html
+          grep -q 'FIELD GIS <b>3.6</b>' www/index.html
           grep -q 'TerraPin 3.2 · single bottom flow' www/index.html
-          grep -q 'terrapin-shell-v3.5' www/sw.js
+          grep -q 'terrapin-shell-v3.6' www/sw.js
           grep -q 'composition-drawer-toggle' www/index.html
           grep -q 'spMore' www/app.js
           grep -q 'infoMore' www/app.js
@@ -437,24 +462,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Preparar fuente TerraPin 3.5
+      - name: Preparar fuente TerraPin 3.6
         run: |
           set -euxo pipefail
-          rm -f TerraPin-3.5-source.zip
-          zip -qr TerraPin-3.5-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
-          test -s TerraPin-3.5-source.zip
-          sha256sum TerraPin-3.5-source.zip
+          rm -f TerraPin-3.6-source.zip
+          zip -qr TerraPin-3.6-source.zip terrapin             -x 'terrapin/node_modules/*'                'terrapin/www/*'                'terrapin/android/*'
+          test -s TerraPin-3.6-source.zip
+          sha256sum TerraPin-3.6-source.zip
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-3.5-apk
+          name: TerraPin-3.6-apk
           path: terrapin/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publicar fuente 3.5
+      - name: Publicar fuente 3.6
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-3.5-source
-          path: TerraPin-3.5-source.zip
+          name: TerraPin-3.6-source
+          path: TerraPin-3.6-source.zip
           if-no-files-found: error
