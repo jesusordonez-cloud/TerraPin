@@ -20,6 +20,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cp .github/workflows/import-terrapin-4.yml /tmp/import-terrapin-4.yml
           cat .transfer/p* | base64 -d > /tmp/terrapin4.tar.xz
           echo "3db2b412d9efb931336d610d717260deedff963737939e51568f672d363c765b  /tmp/terrapin4.tar.xz" | sha256sum -c -
           rm -rf /tmp/terrapin-new
@@ -32,10 +33,14 @@ jobs:
           shopt -s dotglob nullglob
           mv /tmp/terrapin-new/TerraPin-4.0/* .
 
+          rm -f .github/workflows/build-apk.yml
+          mkdir -p .github/workflows
+          cp /tmp/import-terrapin-4.yml .github/workflows/import-terrapin-4.yml
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Replace TerraPin with 4.0 project from ZIP"
+          git commit -m "Load TerraPin 4.0 project from ZIP"
           git push origin HEAD:main
 
       - uses: actions/setup-node@v4
