@@ -93,9 +93,13 @@ const SOURCES = {
   cyclosm: { name: 'Senderos y ciclismo', tag: 'CyclOSM', url: 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', sub: 'abc', max: 20, kb: 30, attr: '&copy; OSM, <a href="https://www.cyclosm.org">CyclOSM</a>' },
   esriNatGeo: { name: 'Nat Geo', tag: 'Esri', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', max: 16, kb: 40, attr: 'Tiles &copy; Esri, National Geographic' },
   // satélite en vivo (NASA GIBS: imagen diaria, gratuita, sin clave; {date} = día elegido)
+  goesEast: { name: 'GOES-East · en vivo', tag: 'NOAA/NASA · cada 10 min', live:true, time:true, url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/{date}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png', max: 7, kb: 20, attr: 'GOES-East ABI &copy; NOAA / <a href="https://earthdata.nasa.gov/gibs">NASA GIBS</a>', detail:'Geoestacionario: imagen nueva cada 10 min de todo América. Ideal para nubes, tormentas y humo' },
   nasaViirs: { name: 'Hoy · VIIRS', tag: 'NASA · imagen diaria', live:true, date:true, url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg', max: 9, kb: 25, attr: 'Imagery &copy; <a href="https://earthdata.nasa.gov/gibs">NASA GIBS</a>', detail:'Suomi NPP · color real · pasa cerca de las 13:30 h locales' },
   nasaNoaa20: { name: 'Hoy · NOAA-20', tag: 'NASA · imagen diaria', live:true, date:true, url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_NOAA20_CorrectedReflectance_TrueColor/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg', max: 9, kb: 25, attr: 'Imagery &copy; NASA GIBS', detail:'Segunda pasada diaria; útil si VIIRS tiene nubes o franjas' },
   nasaModis: { name: 'Hoy · MODIS', tag: 'NASA Terra · imagen diaria', live:true, date:true, url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg', max: 9, kb: 25, attr: 'Imagery &copy; NASA GIBS', detail:'Terra · pasa en la mañana (≈10:30 h locales)' },
+  hlsS30: { name: 'HLS Sentinel 30 m', tag: 'NASA · cada 2–5 días', live:true, date:true, hls:true, url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/HLS_S30_Nadir_BRDF_Adjusted_Reflectance/default/{date}/GoogleMapsCompatible_Level12/{z}/{y}/{x}.png', max: 12, kb: 30, attr: 'HLS &copy; NASA GIBS', detail:'Sentinel-2 armonizado a 30 m: se ven carreteras, parcelas y ríos. Solo hay imagen los días con pase; usa “Pases recientes”' },
+  hlsL30: { name: 'HLS Landsat 30 m', tag: 'NASA · cada 8 días', live:true, date:true, hls:true, url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/HLS_L30_Nadir_BRDF_Adjusted_Reflectance/default/{date}/GoogleMapsCompatible_Level12/{z}/{y}/{x}.png', max: 12, kb: 30, attr: 'HLS &copy; NASA GIBS', detail:'Landsat 8/9 armonizado a 30 m. Alterna con HLS Sentinel para tener más días disponibles' },
+  sentinel2: { name: 'Sentinel-2 10 m', tag: 'Copernicus · tu cuenta', live:true, s2:true, url: '', max: 15, kb: 40, attr: 'Contains modified Copernicus Sentinel data · <a href="https://dataspace.copernicus.eu">CDSE</a>', detail:'La mejor calidad gratuita: 10 m, pase cada 5 días y filtro automático de nubes. Requiere tu ID de Copernicus (Más → Sentinel-2)' },
   s2cloudless: { name: 'Sentinel-2 sin nubes', tag: 'EOX · mosaico anual 10 m', live:true, url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg', max: 17, kb: 30, attr: '<a href="https://s2maps.eu">Sentinel-2 cloudless</a> by <a href="https://eox.at">EOX</a> (CC BY-NC-SA 4.0)', detail:'Mucho más detalle (10 m) pero no es del día: mosaico sin nubes del año' },
   cartoDark: { name: 'Oscuro', tag: 'CARTO', url: 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}' + RET + '.png', sub: 'abcd', max: 20, kb: 15, attr: '&copy; OSM &copy; CARTO' },
   // superposiciones
@@ -107,12 +111,20 @@ const SOURCES = {
 const isoDay = d => { const x = d ? new Date(d) : new Date(); return x.toISOString().slice(0,10); };
 const daysAgo = n => { const d = new Date(); d.setUTCDate(d.getUTCDate() - n); return isoDay(d); };
 const satDate = () => S.settings.satDate || daysAgo(1);
-const cacheId = (srcId, date) => SOURCES[srcId]?.date ? `${srcId}@${date || satDate()}` : srcId;
-const tileURL = (src, z, x, y, i = 0, date) => src.url.replace('{z}', z).replace('{x}', x).replace('{y}', y).replace('{s}', src.sub ? src.sub[i % src.sub.length] : '').replace('{date}', date || satDate());
+const goesSlot = (d = new Date(), back = 0) => { const t = new Date(Math.floor(d.getTime() / 600000) * 600000 - back * 600000); return t.toISOString().slice(0, 16) + ':00Z'; };
+const satTime = () => S.settings.satTime || goesSlot(new Date(), 3);
+/* Sentinel-2 (Sentinel Hub / Copernicus Data Space): la URL se arma con la configuración del usuario */
+const s2Cfg = () => ({ id: (S.settings.s2Instance || '').trim(), layer: (S.settings.s2Layer || '1_TRUE_COLOR').trim(), days: +S.settings.s2Days || 20, cc: +S.settings.s2MaxCC || 20, order: S.settings.s2Order || 'leastCC', to: S.settings.s2To || null });
+const s2Stamp = () => { const c = s2Cfg(); return `${c.to || daysAgo(0)}|${c.days}|${c.cc}|${c.order}`; };
+const s2Url = stamp => { const c = s2Cfg(); const [to, days, cc, order] = (stamp || s2Stamp()).split('|'); const from = isoDay(new Date(new Date(to + 'T00:00:00Z').getTime() - (+days) * 86400000)); return `https://sh.dataspace.copernicus.eu/ogc/wmts/${c.id}?REQUEST=GetTile&LAYER=${encodeURIComponent(c.layer)}&TILEMATRIXSET=PopularWebMercator256&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&TIME=${from}/${to}&MAXCC=${cc}&PRIORITY=${order}&FORMAT=image/jpeg`; };
+const s2Ready = () => /^[0-9a-f-]{20,}$/i.test(s2Cfg().id);
+const satStamp = src => src?.time ? satTime() : src?.s2 ? s2Stamp() : src?.date ? satDate() : null;
+const cacheId = (srcId, date) => { const s = SOURCES[srcId]; if (!s) return srcId; const st = date || satStamp(s); return st ? `${srcId}@${st}` : srcId; };
+const tileURL = (src, z, x, y, i = 0, date) => (src.s2 ? s2Url(date) : src.url).replace('{z}', z).replace('{x}', x).replace('{y}', y).replace('{s}', src.sub ? src.sub[i % src.sub.length] : '').replace('{date}', date || satStamp(src) || '');
 
 /* capa de teselas con caché local primero */
 const OfflineLayer = L.TileLayer.extend({
-  initialize(srcId, opts) { this.srcId = srcId; this.src = SOURCES[srcId]; this.cacheKey = cacheId(srcId); L.TileLayer.prototype.initialize.call(this, this.src.url, L.extend({ maxZoom: 20, maxNativeZoom: this.src.max, subdomains: this.src.sub || 'abc', attribution: this.src.attr, updateWhenIdle: true, keepBuffer: 3, date: satDate(), errorTileUrl: this.src.date ? 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' : '' }, opts)); },
+  initialize(srcId, opts) { this.srcId = srcId; this.src = SOURCES[srcId]; this.cacheKey = cacheId(srcId); L.TileLayer.prototype.initialize.call(this, this.src.s2 ? s2Url() : this.src.url, L.extend({ maxZoom: 20, maxNativeZoom: this.src.max, subdomains: this.src.sub || 'abc', attribution: this.src.attr, updateWhenIdle: true, keepBuffer: 3, date: satStamp(this.src) || '', errorTileUrl: (this.src.date || this.src.time || this.src.s2) ? 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' : '' }, opts)); },
   createTile(coords, done) {
     const img = document.createElement('img');
     img.alt = ''; img.setAttribute('role', 'presentation');
@@ -128,7 +140,7 @@ const OfflineLayer = L.TileLayer.extend({
 
 /* ---------- estado ---------- */
 const S = {
-  settings: { base: 'cartoVoyager', theme: 'dark', satDate: null, satSource: 'nasaViirs', minAcc: 40, autoFollow: true, overlays: {}, order: [], opacity: {}, activeProject: null, openFolders: {} },
+  settings: { base: 'cartoVoyager', theme: 'dark', satDate: null, satTime: null, satAuto: true, satSource: 'goesEast', s2Instance: '', s2Layer: '1_TRUE_COLOR', s2Days: 20, s2MaxCC: 20, s2Order: 'leastCC', s2To: null, minAcc: 40, autoFollow: true, overlays: {}, order: [], opacity: {}, activeProject: null, openFolders: {} },
   folders: [], projects: [], waypoints: [], tracks: [], vectors: [], packs: [],
   layers: {}, trackLayers: {}, vectorLayers: {}, wpLayers: {}, panes: {},
   tab: null, sel: null, measure: null, rec: null, me: null, follow: false, watchId: null,
@@ -144,13 +156,14 @@ const map = L.map('map', { zoomControl: false, attributionControl: true, tap: fa
 map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
 let baseLayer;
 const setBase = id => {
+  if (SOURCES[id]?.s2 && !s2Ready()) { openS2Setup(); return; }
   if (baseLayer) map.removeLayer(baseLayer);
   baseLayer = new OfflineLayer(id, { pane: 'tilePane' }).addTo(map);
   S.settings.base = id; save();
   document.querySelectorAll('.basegrid button').forEach(b => b.classList.toggle('active', b.dataset.id === id));
   document.querySelectorAll('[data-basequick]').forEach(b => b.classList.toggle('active', b.dataset.basequick === id));
   $('#btnSat')?.classList.toggle('active', !!SOURCES[id].live);
-  renderSatPanel();
+  renderSatPanel(); refreshSatStamp();
 };
 document.querySelectorAll('[data-basequick]').forEach(b => b.onclick = () => setBase(b.dataset.basequick));
 
@@ -842,50 +855,153 @@ const pickArea = () => new Promise(res => {
 const newPackDialog = async (bounds) => {
   if (selRect) { map.removeLayer(selRect); } selRect = L.rectangle(bounds, { color: '#D9B45B', weight: 2, fillOpacity: .1, interactive: false }).addTo(map);
   const z = Math.max(1, Math.round(map.getZoom())); const bm = SOURCES[S.settings.base]?.max || 19; const z1def = Math.min(z + 3, 16, bm), z0def = Math.max(1, Math.min(z - 2, z1def - 3));
-  const render = () => { const src = SOURCES[$('#pkSrc').value]; const tip=$('#pkTip'); if(tip) tip.textContent = src.date ? `Esta vista corresponde al día ${satDate()}. Su detalle máximo es zoom ${src.max} (≈300 m por píxel): ideal para contexto regional, nubes, humo o inundaciones.` : 'Consejo: zoom 15–16 es suficiente para caminar; 17–18 para ver casas y veredas. Cada nivel multiplica ×4 el tamaño.'; $('#pkZ1').max = src.max; if (+$('#pkZ1').value > src.max) $('#pkZ1').value = src.max; if (+$('#pkZ0').value > +$('#pkZ1').value) $('#pkZ0').value = Math.max(1, +$('#pkZ1').value - 3); const z0 = +$('#pkZ0').value, z1 = +$('#pkZ1').value; const n = countTiles(bounds, z0, z1); $('#pkEst').innerHTML = `<b>${n.toLocaleString()}</b> teselas · aprox. <b>${fmtBytes(n * src.kb * 1024)}</b>${n > 25000 ? '<br><span style="color:#B3371C">Área muy grande: reduce el zoom máximo o el área.</span>' : ''}`; $('#pkOk').disabled = n > 60000; };
+  const render = () => { const src = SOURCES[$('#pkSrc').value]; const tip=$('#pkTip'); if(tip) tip.textContent = src.s2 ? `Sentinel-2 a 10 m: pase menos nublado de los últimos ${s2Cfg().days} días (máx. ${s2Cfg().cc} % nubes). Zoom 13–15 muestra calles principales y lotes. Consume cuota de tu cuenta Copernicus.` : src.hls ? `HLS a 30 m del día ${satDate()}: carreteras, parcelas y ríos visibles hasta zoom ${src.max}.` : src.time ? `Imagen GOES de las ${satTime().slice(11,16)} UTC. Detalle máximo zoom ${src.max} (≈1 km por píxel): perfecto para nubes, tormentas y humo en tiempo casi real.` : src.date ? `Esta vista corresponde al día ${satDate()}. Su detalle máximo es zoom ${src.max} (≈300 m por píxel): ideal para contexto regional, nubes, humo o inundaciones.` : 'Consejo: zoom 15–16 es suficiente para caminar; 17–18 para ver casas y veredas. Cada nivel multiplica ×4 el tamaño.'; $('#pkZ1').max = src.max; if (+$('#pkZ1').value > src.max) $('#pkZ1').value = src.max; if (+$('#pkZ0').value > +$('#pkZ1').value) $('#pkZ0').value = Math.max(1, +$('#pkZ1').value - 3); const z0 = +$('#pkZ0').value, z1 = +$('#pkZ1').value; const n = countTiles(bounds, z0, z1); $('#pkEst').innerHTML = `<b>${n.toLocaleString()}</b> teselas · aprox. <b>${fmtBytes(n * src.kb * 1024)}</b>${n > 25000 ? '<br><span style="color:#B3371C">Área muy grande: reduce el zoom máximo o el área.</span>' : ''}`; $('#pkOk').disabled = n > 60000; };
   openModal(`<h3>Descargar mapa</h3>
   <div class="field"><label>Nombre</label><input id="pkName" value="Mapa ${S.packs.length + 1}"></div>
-  <div class="field"><label>Fuente</label><select id="pkSrc">${Object.entries(SOURCES).map(([k, s]) => `<option value="${k}" ${k === S.settings.base ? 'selected' : ''}>${s.name}${s.date ? ' · ' + satDate() : ''}${s.overlay ? ' (superposición)' : ''}</option>`).join('')}</select></div>
+  <div class="field"><label>Fuente</label><select id="pkSrc">${Object.entries(SOURCES).filter(([k, s]) => !s.hidden && !(s.s2 && !s2Ready())).map(([k, s]) => `<option value="${k}" ${k === S.settings.base ? 'selected' : ''}>${s.name}${s.time ? ' · ' + satTime().slice(0,16).replace('T',' ') + ' UTC' : s.s2 ? ' · últimos ' + s2Cfg().days + ' días' : s.date ? ' · ' + satDate() : ''}${s.overlay ? ' (superposición)' : ''}</option>`).join('')}</select></div>
   <div class="grid2"><div class="field"><label>Zoom mínimo</label><input id="pkZ0" type="number" min="1" max="20" value="${z0def}"></div><div class="field"><label>Zoom máximo (detalle)</label><input id="pkZ1" type="number" min="1" max="20" value="${z1def}"></div></div>
   <div class="card" id="pkEst"></div><p class="muted" id="pkTip">Consejo: zoom 15–16 es suficiente para caminar; 17–18 para ver casas y veredas. Cada nivel multiplica ×4 el tamaño.</p>
   <div class="actions"><button class="btn ghost" data-close id="pkCancel">Cancelar</button><button class="btn" id="pkOk">Descargar</button></div>`);
   ['pkSrc', 'pkZ0', 'pkZ1'].forEach(id => $('#' + id).oninput = render); render();
   $('#pkCancel').onclick = () => { map.removeLayer(selRect); selRect = null; };
-  $('#pkOk').onclick = () => { const pack = { id: uid(), name: $('#pkName').value.trim() || 'Mapa', source: $('#pkSrc').value, date: SOURCES[$('#pkSrc').value].date ? satDate() : null, bounds: [[bounds.getSouth(), bounds.getWest()], [bounds.getNorth(), bounds.getEast()]], zmin: +$('#pkZ0').value, zmax: Math.min(+$('#pkZ1').value, SOURCES[$('#pkSrc').value].max), created: Date.now(), bytes: 0, status: 'descargando' }; closeModal(); map.removeLayer(selRect); selRect = null; S.packs.push(pack); openTab('offline'); runDownload(pack); };
+  $('#pkOk').onclick = () => { const pack = { id: uid(), name: $('#pkName').value.trim() || 'Mapa', source: $('#pkSrc').value, date: satStamp(SOURCES[$('#pkSrc').value]), bounds: [[bounds.getSouth(), bounds.getWest()], [bounds.getNorth(), bounds.getEast()]], zmin: +$('#pkZ0').value, zmax: Math.min(+$('#pkZ1').value, SOURCES[$('#pkSrc').value].max), created: Date.now(), bytes: 0, status: 'descargando' }; closeModal(); map.removeLayer(selRect); selRect = null; S.packs.push(pack); openTab('offline'); runDownload(pack); };
 };
 
 
-/* ---------- satélite en vivo (NASA GIBS) ---------- */
+/* ---------- satélite en vivo (GOES · NASA GIBS · HLS · Sentinel-2) ---------- */
 const satPanel = $('#satPanel');
 const LIVE_SOURCES = () => Object.entries(SOURCES).filter(([, s]) => s.live && !s.overlay);
-const setSatDate = async d => {
-  S.settings.satDate = d; await save();
-  if (SOURCES[S.settings.base]?.date) setBase(S.settings.base);
+const satSel = () => S.settings.satSource && SOURCES[S.settings.satSource]?.live ? S.settings.satSource : 'goesEast';
+const fmtLocal = iso => new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const fmtDay = d => { const [y, m, dd] = d.split('-'); return `${dd}/${m}/${y}`; };
+const fmtAgo = iso => { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.floor(m / 60)} h ${m % 60} min` : `hace ${Math.floor(m / 1440)} d`; };
+let s2LastDates = null, hlsDates = {};
+const satStampText = (id = S.settings.base) => {
+  const s = SOURCES[id]; if (!s || !s.live) return '';
+  if (s.time) { const t = satTime(); return `GOES-East · ${fmtLocal(t)} hora local (${t.slice(11,16)} UTC) · ${fmtAgo(t)}`; }
+  if (s.s2) { const c = s2Cfg(); if (!s2Ready()) return 'Sentinel-2 · pendiente de configurar (Más → Sentinel-2)'; const best = s2LastDates?.[0]; return `Sentinel-2 10 m · ${c.order === 'leastCC' ? 'pase menos nublado' : 'pase más reciente'} de los últimos ${c.days} días (≤${c.cc} % nubes)` + (best ? ` · probable: ${fmtDay(best.date)} (${best.cc} % nubes)` : ''); }
+  if (s.hls) return `${s.name} · ${fmtDay(satDate())} · ~30 m por píxel`;
+  if (s.date) { const pass = { nasaViirs: '≈13:30', nasaNoaa20: '≈12:40', nasaModis: '≈10:30' }[id] || ''; const d = satDate(); return `${s.name.replace('Hoy · ','')} · ${fmtDay(d)} · pasada ${pass} h local${d === daysAgo(0) ? ' · hoy' : d === daysAgo(1) ? ' · ayer' : ''}`; }
+  return 'Sentinel-2 · mosaico sin nubes 2023 (10 m) · no es imagen del día';
+};
+const refreshSatStamp = () => { const el = $('#satStamp'); if (!el) return; const t = satStampText(); el.textContent = t; el.classList.toggle('show', !!t); el.classList.toggle('cloudfree', S.settings.base === 's2cloudless'); };
+const reloadLiveLayers = () => {
+  if (SOURCES[S.settings.base]?.live) setBase(S.settings.base);
   Object.keys(SOURCES).filter(k => SOURCES[k].overlay && SOURCES[k].date && S.settings.overlays[k]).forEach(k => { if (S.layers[k]) { map.removeLayer(S.layers[k]); delete S.layers[k]; } overlayLayer(k); });
   renderSatPanel();
 };
-const renderSatPanel = () => {
+const setSatDate = async d => { S.settings.satDate = d; await save(); reloadLiveLayers(); };
+const setSatTime = async t => { S.settings.satTime = t; await save(); reloadLiveLayers(); };
+/* ¿La tesela trae datos? (GIBS devuelve PNG transparente cuando no hay pase ese día) */
+const tileHasData = async url => { try { const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) return false; const bmp = await createImageBitmap(await r.blob()); const c = document.createElement('canvas'); c.width = c.height = 24; const g = c.getContext('2d'); g.drawImage(bmp, 0, 0, 24, 24); const d = g.getImageData(0, 0, 24, 24).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 40) n++; return n > 20; } catch { return false; } };
+/* Último horario GOES publicado */
+let goesProbe = null;
+const findLatestGoes = async () => {
+  if (!navigator.onLine) return null; if (goesProbe) return goesProbe;
+  goesProbe = (async () => { const src = SOURCES.goesEast; for (let back = 1; back <= 18; back++) { const t = goesSlot(new Date(), back); try { const r = await fetch(tileURL(src, 2, 1, 1, 0, t), { cache: 'no-store' }); if (r.ok && (r.headers.get('content-type') || '').includes('image')) return t; } catch {} } return null; })();
+  const r = await goesProbe; goesProbe = null; return r;
+};
+const useLatestGoes = async (silent = false) => {
+  if (!silent) toast('Buscando la imagen más reciente…');
+  const t = await findLatestGoes();
+  if (!t) { if (!silent) toast('No se pudo consultar GOES ahora; se usa el último horario estimado'); return; }
+  if (t !== S.settings.satTime) await setSatTime(t); else renderSatPanel();
+  if (!silent) toast(`Imagen GOES de ${fmtLocal(t)} (${fmtAgo(t)})`);
+};
+setInterval(() => { if (S.settings.satAuto && S.settings.base === 'goesEast' && navigator.onLine) useLatestGoes(true); }, 5 * 60000);
+/* Pases HLS recientes sobre el centro del mapa (sondea 30 días) */
+let hlsProbe = null;
+const findHlsDates = async id => {
+  if (!navigator.onLine) return []; const c = map.getCenter(), z = 8, key = `${id}:${lng2x(c.lng, z)}:${lat2y(c.lat, z)}`;
+  if (hlsDates[key]) return hlsDates[key]; if (hlsProbe) return hlsProbe;
+  hlsProbe = (async () => { const out = []; const src = SOURCES[id]; const x = lng2x(c.lng, z), y = lat2y(c.lat, z);
+    for (let back = 2; back <= 32 && out.length < 6; back++) { const d = daysAgo(back); if (await tileHasData(tileURL(src, z, x, y, 0, d))) out.push(d); }
+    hlsDates[key] = out; return out; })();
+  const r = await hlsProbe; hlsProbe = null; return r;
+};
+/* Fechas reales Sentinel-2 en la vista (WFS de Sentinel Hub) */
+const findS2Dates = async () => {
+  if (!s2Ready() || !navigator.onLine) return null; const c = s2Cfg(), b = map.getBounds(), to = c.to || daysAgo(0), from = isoDay(new Date(new Date(to + 'T00:00:00Z').getTime() - c.days * 86400000));
+  const cx = b.getCenter(), dl = 0.05; const bbox = `${(cx.lat - dl).toFixed(4)},${(cx.lng - dl).toFixed(4)},${(cx.lat + dl).toFixed(4)},${(cx.lng + dl).toFixed(4)}`;
+  for (const tn of ['DSS2', 'DSS10']) { try { const r = await fetch(`https://sh.dataspace.copernicus.eu/ogc/wfs/${c.id}?REQUEST=GetFeature&TYPENAMES=${tn}&SRSNAME=EPSG:4326&BBOX=${bbox}&TIME=${from}/${to}&MAXCC=100&OUTPUTFORMAT=application/json&MAXFEATURES=40`); if (!r.ok) continue; const j = await r.json(); const feats = (j.features || []).map(f => ({ date: f.properties?.date, cc: Math.round(+f.properties?.cloudCoverPercentage || 0) })).filter(f => f.date); if (!feats.length) continue; const byDay = {}; feats.forEach(f => { if (!byDay[f.date] || byDay[f.date] > f.cc) byDay[f.date] = f.cc; }); const list = Object.entries(byDay).map(([date, cc]) => ({ date, cc })).sort((p, q) => q.date.localeCompare(p.date)); const ok = list.filter(f => f.cc <= c.cc); const sorted = c.order === 'leastCC' ? ok.slice().sort((p, q) => p.cc - q.cc) : ok; return (sorted.length ? sorted : list).slice(0, 8); } catch {} }
+  return null;
+};
+const renderSatPanel = async () => {
   if (!satPanel) return;
-  const sel = S.settings.satSource && SOURCES[S.settings.satSource]?.live ? S.settings.satSource : 'nasaViirs';
-  const today = daysAgo(0), d = satDate();
-  const srcEl = $('#satSources'); if (srcEl) srcEl.innerHTML = LIVE_SOURCES().map(([k, s]) => `<button data-satsrc="${k}" class="${k === sel ? 'active' : ''}">${esc(s.name.replace('Hoy · ', ''))}<small>${esc(s.detail || s.tag)}</small></button>`).join('');
-  const chips = [['Hoy', today], ['Ayer', daysAgo(1)], ['Hace 2 días', daysAgo(2)], ['Hace 7 días', daysAgo(7)]];
-  const dEl = $('#satDates'); if (dEl) dEl.innerHTML = chips.map(([l, v]) => `<button data-satdate="${v}" class="${v === d ? 'active' : ''}">${l}</button>`).join('') + `<input type="date" id="satDateIn" max="${today}" value="${d}">`;
-  const s = SOURCES[sel];
-  const note = $('#satNote'); if (note) note.textContent = s.date ? `${s.name} · ${d}. La imagen del día suele estar lista 3–5 h después de la pasada; si ves zonas en negro, elige “Ayer”. Detalle máximo ≈300 m por píxel: ideal para contexto regional.` : `${s.name}. Mosaico anual sin nubes con 10 m de detalle (hasta zoom ${s.max}); no corresponde a un día concreto.`;
+  const sel = satSel(), s = SOURCES[sel], today = daysAgo(0), d = satDate(), t = satTime();
+  const srcEl = $('#satSources'); if (srcEl) srcEl.innerHTML = LIVE_SOURCES().map(([k, x]) => `<button data-satsrc="${k}" class="${k === sel ? 'active' : ''}${x.time ? ' rt' : ''}${x.s2 && !s2Ready() ? ' setup' : ''}">${esc(x.name.replace('Hoy · ', '').replace(' · en vivo',''))}<small>${esc(x.tag)}</small></button>`).join('');
+  const dEl = $('#satDates');
+  if (dEl) {
+    if (s.time) {
+      const steps = [['Última', null], ['−1 h', 6], ['−3 h', 18], ['−6 h', 36], ['−12 h', 72]];
+      dEl.innerHTML = steps.map(([l, b]) => `<button data-sattime="${b === null ? 'latest' : goesSlot(new Date(), b + 2)}" class="${(b === null && S.settings.satAuto) ? 'active' : ''}">${l}</button>`).join('') + `<button data-satauto class="${S.settings.satAuto ? 'active' : ''}" title="Actualizar sola cada 5 min">Auto ${S.settings.satAuto ? '●' : '○'}</button>`;
+    } else if (s.s2) {
+      const c = s2Cfg();
+      dEl.innerHTML = s2Ready() ? `<span class="lbl">Nubes máx.</span>${[10, 20, 40, 70].map(v => `<button data-s2cc="${v}" class="${c.cc === v ? 'active' : ''}">${v} %</button>`).join('')}<span class="lbl">Ventana</span>${[10, 20, 30, 60].map(v => `<button data-s2days="${v}" class="${c.days === v ? 'active' : ''}">${v} d</button>`).join('')}<span class="lbl">Prioridad</span><button data-s2order="leastCC" class="${c.order === 'leastCC' ? 'active' : ''}">Menos nubes</button><button data-s2order="mostRecent" class="${c.order === 'mostRecent' ? 'active' : ''}">Más reciente</button><div class="passes" id="s2Passes"><small>Consultando pases reales en esta zona…</small></div>` : `<button data-s2setup class="setup">Configurar mi cuenta Copernicus</button>`;
+    } else if (s.hls) {
+      dEl.innerHTML = `<span class="lbl">Pases recientes</span><div class="passes" id="hlsPasses"><small>Buscando días con imagen en esta zona…</small></div><input type="date" id="satDateIn" max="${today}" value="${d}">`;
+    } else if (s.date) {
+      const chips = [['Hoy', today], ['Ayer', daysAgo(1)], ['Hace 2 días', daysAgo(2)], ['Hace 7 días', daysAgo(7)]];
+      dEl.innerHTML = chips.map(([l, v]) => `<button data-satdate="${v}" class="${v === d ? 'active' : ''}">${l}</button>`).join('') + `<input type="date" id="satDateIn" max="${today}" value="${d}">`;
+    } else dEl.innerHTML = '';
+    dEl.style.display = dEl.innerHTML ? '' : 'none';
+  }
+  const cf = $('#satCloudFree'); if (cf) cf.classList.toggle('active', sel === 's2cloudless');
+  const note = $('#satNote');
+  if (note) note.innerHTML = `<b>Imagen seleccionada:</b> ${esc(satStampText(sel))}<br>${esc(s.detail || '')}` + (s.time ? '<br>Latencia ≈20–30 min. De noche la imagen es sintética en tonos azul-gris.' : s.date && !s.hls ? '<br>Si ves zonas negras, la pasada de hoy aún no está procesada: elige “Ayer”.' : '');
   satPanel.querySelectorAll('[data-satsrc]').forEach(b => b.onclick = () => { S.settings.satSource = b.dataset.satsrc; save(); renderSatPanel(); });
   satPanel.querySelectorAll('[data-satdate]').forEach(b => b.onclick = () => setSatDate(b.dataset.satdate));
-  const di = $('#satDateIn'); if (di) di.onchange = () => { if (di.value) setSatDate(di.value); };
-  const dates = $('#satDates'); if (dates) dates.style.display = s.date ? '' : 'none';
+  satPanel.querySelectorAll('[data-sattime]').forEach(b => b.onclick = () => { if (b.dataset.sattime === 'latest') { S.settings.satAuto = true; useLatestGoes(); } else { S.settings.satAuto = false; setSatTime(b.dataset.sattime); } });
+  const au = satPanel.querySelector('[data-satauto]'); if (au) au.onclick = () => { S.settings.satAuto = !S.settings.satAuto; save(); renderSatPanel(); if (S.settings.satAuto) useLatestGoes(true); };
+  const s2set = (k, v) => async () => { S.settings[k] = v; S.settings.s2To = null; s2LastDates = null; await save(); reloadLiveLayers(); };
+  satPanel.querySelectorAll('[data-s2cc]').forEach(b => b.onclick = s2set('s2MaxCC', +b.dataset.s2cc));
+  satPanel.querySelectorAll('[data-s2days]').forEach(b => b.onclick = s2set('s2Days', +b.dataset.s2days));
+  satPanel.querySelectorAll('[data-s2order]').forEach(b => b.onclick = s2set('s2Order', b.dataset.s2order));
+  satPanel.querySelectorAll('[data-s2setup]').forEach(b => b.onclick = () => { closeSatPanel(); openS2Setup(); });
+  const di = $('#satDateIn'); if (di) di.onchange = () => { if (di.value) { S.settings.hlsManual = true; setSatDate(di.value); } };
+  refreshSatStamp();
+  if (s.hls) { const list = await findHlsDates(sel); const el = $('#hlsPasses'); if (el && satSel() === sel) { el.innerHTML = list.length ? list.map(v => `<button data-satdate="${v}" class="${v === satDate() ? 'active' : ''}">${fmtDay(v)}</button>`).join('') : '<small>No se encontraron pases en los últimos 30 días en esta zona (o sin conexión). Elige una fecha manual.</small>'; el.querySelectorAll('[data-satdate]').forEach(b => b.onclick = () => { S.settings.hlsManual = false; setSatDate(b.dataset.satdate); }); if (list.length && !list.includes(satDate()) && !S.settings.hlsManual) { S.settings.satDate = list[0]; save(); if (S.settings.base === sel) reloadLiveLayers(); else renderSatPanel(); } } }
+  if (s.s2 && s2Ready()) { const list = await findS2Dates(); const el = $('#s2Passes'); if (el && satSel() === sel) { s2LastDates = list; el.innerHTML = list?.length ? `<small>Pases reales en esta zona (toca uno para verlo):</small>` + list.map(f => `<button data-s2day="${f.date}" class="${s2Cfg().to === f.date && s2Cfg().days === 0 ? 'active' : ''}">${fmtDay(f.date)} · ${f.cc} %</button>`).join('') + (s2Cfg().days === 0 ? `<button data-s2reset>Volver a ventana automática</button>` : '') : '<small>No se pudieron consultar las fechas (revisa el ID o la conexión).</small>'; el.querySelectorAll('[data-s2day]').forEach(b => b.onclick = async () => { S.settings.s2To = b.dataset.s2day; S.settings.s2Days = 0; S.settings.s2MaxCC = 100; await save(); reloadLiveLayers(); }); const rs = el.querySelector('[data-s2reset]'); if (rs) rs.onclick = async () => { S.settings.s2To = null; S.settings.s2Days = 20; S.settings.s2MaxCC = 20; await save(); reloadLiveLayers(); }; refreshSatStamp(); } }
 };
-const openSatPanel = (forDownload = false) => { renderSatPanel(); satPanel.classList.add('open'); if (forDownload) toast('Elige fuente y día; luego “Guardar esta vista offline”'); };
+const openSatPanel = (forDownload = false) => { renderSatPanel(); satPanel.classList.add('open'); if (forDownload) toast('Elige fuente y momento; luego “Guardar esta vista offline”'); };
 const closeSatPanel = () => satPanel.classList.remove('open');
+const showSat = k => { if (SOURCES[k].s2 && !s2Ready()) { closeSatPanel(); openS2Setup(); return; } S.settings.satSource = k; setBase(k); closeSatPanel(); if (k === 'goesEast' && S.settings.satAuto) useLatestGoes(true); if (map.getZoom() > SOURCES[k].max + 2) toast(`Esta fuente se ve mejor hasta zoom ${SOURCES[k].max}; aléjate un poco`); };
 $('#btnSat').onclick = () => satPanel.classList.contains('open') ? closeSatPanel() : openSatPanel();
 $('#satClose').onclick = closeSatPanel;
-$('#satShow').onclick = () => { const k = S.settings.satSource && SOURCES[S.settings.satSource]?.live ? S.settings.satSource : 'nasaViirs'; setBase(k); closeSatPanel(); if (map.getZoom() > SOURCES[k].max + 2) toast(`Esta fuente se ve mejor hasta zoom ${SOURCES[k].max}; aléjate un poco`); };
-$('#satDownload').onclick = () => { const k = S.settings.satSource && SOURCES[S.settings.satSource]?.live ? S.settings.satSource : 'nasaViirs'; setBase(k); closeSatPanel(); newPackDialog(map.getBounds()); };
+$('#satShow').onclick = () => showSat(satSel());
+$('#satCloudFree').onclick = () => { const k = satSel() === 's2cloudless' ? (SOURCES[S.settings.satPrev]?.live ? S.settings.satPrev : 'goesEast') : (S.settings.satPrev = satSel(), 's2cloudless'); S.settings.satSource = k; save(); renderSatPanel(); if (SOURCES[S.settings.base]?.live) showSat(k); };
+$('#satDownload').onclick = () => { const k = satSel(); if (SOURCES[k].s2 && !s2Ready()) return openS2Setup(); setBase(k); closeSatPanel(); newPackDialog(map.getBounds()); };
+$('#satStamp').onclick = () => openSatPanel();
 map.on('dragstart zoomstart', () => { if (satPanel.classList.contains('open')) closeSatPanel(); });
 document.querySelector('.sheet')?.addEventListener('transitionstart', closeSatPanel);
+
+/* ---------- configuración Sentinel-2 (Copernicus Data Space) ---------- */
+const S2_LAYER_CANDIDATES = ['1_TRUE_COLOR', 'TRUE_COLOR', 'TRUE-COLOR', 'TRUE_COLOR_S2L2A', '1_TRUE-COLOR'];
+const s2TestLayer = async (id, layer) => { try { const u = `https://sh.dataspace.copernicus.eu/ogc/wmts/${id}?REQUEST=GetTile&LAYER=${encodeURIComponent(layer)}&TILEMATRIXSET=PopularWebMercator256&TILEMATRIX=5&TILEROW=14&TILECOL=8&TIME=${daysAgo(60)}/${daysAgo(0)}&MAXCC=90&FORMAT=image/jpeg`; const r = await fetch(u, { cache: 'no-store' }); return r.ok && (r.headers.get('content-type') || '').includes('image'); } catch { return false; } };
+const s2Guide = () => `<div class="modal-kicker">Guía</div><h3>Cuenta gratuita Copernicus</h3>
+<ol class="guide"><li>Entra a <b>dataspace.copernicus.eu</b> y pulsa <b>Register</b>. Confirma el correo.</li><li>Abre <b>shapps.dataspace.copernicus.eu/dashboard</b> e inicia sesión con esa cuenta.</li><li>En el menú izquierdo elige <b>Configuration Utility</b> → <b>New configuration</b>.</li><li>Nombre: <b>TerraPin</b>. En “Create configuration based on” elige la plantilla <b>Simple Sentinel-2 L2A</b> y pulsa <b>Create configuration</b>.</li><li>Arriba aparece <b>Id</b> (un código largo con guiones). Cópialo.</li><li>Pégalo en TerraPin → Más → Sentinel-2 y pulsa <b>Probar y guardar</b>. La app detecta sola el nombre de la capa de color real.</li></ol>
+<p class="muted">La cuenta gratuita incluye una cuota mensual amplia para uso personal. Cada tesela que ves o descargas consume un poco; descarga solo el área que necesites. El ID se guarda solo en tu teléfono.</p>
+<div class="actions"><button class="btn" data-close>Entendido</button></div>`;
+const openS2Setup = () => {
+  const c = s2Cfg();
+  openModal(`<div class="modal-kicker">Sentinel-2 · 10 m</div><h3>Configurar mi cuenta Copernicus</h3><p class="muted">Pega el ID de la configuración creada en el panel de Sentinel Hub de Copernicus. Si aún no tienes cuenta, sigue la guía (5 minutos).</p>
+  <div class="field"><label>ID de configuración (instancia)</label><input id="s2Id" value="${esc(c.id)}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocapitalize="none" spellcheck="false"></div>
+  <div class="field"><label>Capa de color real (se detecta sola)</label><input id="s2Layer" value="${esc(c.layer)}"></div>
+  <div class="card" id="s2Status">${s2Ready() ? '<b>Configurado.</b> Puedes probar la conexión o cambiar el ID.' : 'Sin configurar todavía.'}</div>
+  <div class="actions"><button class="btn ghost" id="s2Guide">Ver guía</button>${s2Ready() ? '<button class="btn danger" id="s2Clear">Quitar</button>' : ''}<button class="btn ghost" data-close>Cerrar</button><button class="btn" id="s2Test">Probar y guardar</button></div>`);
+  $('#s2Guide').onclick = () => { openModal(s2Guide()); };
+  const cl = $('#s2Clear'); if (cl) cl.onclick = async () => { S.settings.s2Instance = ''; await save(); if (S.settings.base === 'sentinel2') setBase('esriSat'); closeModal(); renderSatPanel(); toast('Sentinel-2 desactivado'); };
+  $('#s2Test').onclick = async () => {
+    const id = $('#s2Id').value.trim(), st = $('#s2Status'); if (!/^[0-9a-f-]{20,}$/i.test(id)) { st.innerHTML = '<b style="color:#FF9A86">El ID no parece válido.</b> Debe ser un código con guiones como 1a2b3c4d-….'; return; }
+    if (!navigator.onLine) { st.textContent = 'Sin conexión: no se puede probar ahora.'; return; }
+    st.textContent = 'Probando conexión con Copernicus…';
+    const typed = $('#s2Layer').value.trim(); const cands = [typed, ...S2_LAYER_CANDIDATES.filter(x => x !== typed)].filter(Boolean); let found = null;
+    for (const l of cands) { if (await s2TestLayer(id, l)) { found = l; break; } }
+    if (!found) { st.innerHTML = '<b style="color:#FF9A86">No responde con imagen.</b> Revisa que el ID sea el de la configuración (no el de la cuenta) y que la plantilla sea Sentinel-2 L2A; también puedes escribir el nombre exacto de la capa que aparece en tu configuración.'; return; }
+    S.settings.s2Instance = id; S.settings.s2Layer = found; S.settings.s2To = null; s2LastDates = null; await save();
+    st.innerHTML = `<b style="color:var(--ok)">Conectado.</b> Capa detectada: ${esc(found)}.`; toast('Sentinel-2 listo'); S.settings.satSource = 'sentinel2'; renderSatPanel(); setTimeout(() => { closeModal(); showSat('sentinel2'); }, 700);
+  };
+};
 
 /* ---------- búsqueda ---------- */
 const doSearch = async () => {
@@ -936,10 +1052,10 @@ const renderSheet = () => { refreshProjectHud(); refreshMapHud();
       const op = S.settings.opacity[id] ?? (kind === 'ov' ? SOURCES[id.slice(3)].opacity : 1);
       return `<div class="item" data-lid="${id}"><button class="layer-drag" data-drag aria-label="Mover capa">⠿</button><span class="layer-rank">${i+1}${i===0?'<span class="layer-front">TOP</span>':''}</span><div class="row" style="flex-direction:column;gap:2px"><button class="mini" data-up ${i === 0 ? 'disabled' : ''}>${ICON.up}</button><button class="mini" data-down ${i === S.settings.order.length - 1 ? 'disabled' : ''}>${ICON.down}</button></div><div class="grow"><div class="row"><i class="swatch" style="background:${color || (kind === 'ov' ? 'var(--teal)' : 'var(--amber)')}"></i><span class="ttl">${esc(name)}</span></div><input type="range" min="10" max="100" value="${Math.round(op * 100)}" data-op aria-label="Opacidad"></div><button class="toggle ${on ? 'on' : ''}" data-tog aria-label="Mostrar"></button></div>`;
     }).join('');
-    const baseBtn = ([k, s]) => `<button data-id="${k}" class="${k === S.settings.base ? 'active' : ''}${s.date ? ' live' : ''}">${s.name}<span class="tag">${s.tag}</span></button>`;
+    const baseBtn = ([k, s]) => `<button data-id="${k}" class="${k === S.settings.base ? 'active' : ''}${s.date || s.time || s.s2 ? ' live' : ''}">${s.name}<span class="tag">${s.s2 && !s2Ready() ? 'Toca para configurar' : s.tag}</span></button>`;
     B.innerHTML = `<div class="section-title">Mapa base</div><div class="basegrid">${Object.entries(SOURCES).filter(([, s]) => !s.overlay && !s.live && !s.hidden).map(baseBtn).join('')}</div>
     <div class="section-title">Satélite en vivo</div><div class="basegrid">${Object.entries(SOURCES).filter(([, s]) => !s.overlay && s.live).map(baseBtn).join('')}</div>
-    <div class="row" style="margin:-6px 0 14px;justify-content:space-between"><span class="muted">Día de la imagen: <b>${satDate()}</b></span><button class="btn sm ghost" id="lySatDate">Cambiar día o guardar offline</button></div>
+    <div class="row" style="margin:-6px 0 14px;justify-content:space-between"><span class="muted">${esc(satStampText(SOURCES[S.settings.base]?.live ? S.settings.base : satSel()))}</span><button class="btn sm ghost" id="lySatDate">Cambiar momento / sin nubes</button></div>
     <div class="section-title">Orden de capas</div><div class="muted" style="margin-bottom:8px">Arrastra para definir qué capa se dibuja encima.</div><div class="list layer-order-list" id="layerOrderList">${items}</div><div class="sheet-end">Fin de las capas</div>`;
     B.querySelectorAll('.basegrid button').forEach(b => b.onclick = () => setBase(b.dataset.id));
     $('#lySatDate').onclick = () => { closeSheet(); openSatPanel(); };
@@ -985,7 +1101,7 @@ const renderSheet = () => { refreshProjectHud(); refreshMapHud();
   }
   if (S.tab === 'offline') {
     const prog = dl ? `<div class="card"><b>Descargando "${esc(dl.pack.name)}"</b><div class="progress" id="dlProg" style="margin:8px 0"><i></i></div><div class="row" style="justify-content:space-between"><span class="muted" id="dlTxt">…</span><button class="btn sm danger" id="dlStop">Pausar</button></div></div>` : '';
-    const packs = S.packs.map(p => `<div class="item" data-pk="${p.id}"><div class="grow"><div class="ttl">${esc(p.name)}</div><div class="sub">${esc(SOURCES[p.source]?.name || p.source)}${p.date ? ' · ' + p.date : ''} · zoom ${p.zmin}–${p.zmax} · ${fmtBytes(p.bytes || 0)} · ${p.status}</div></div><button class="mini" data-show>${ICON.center}</button>${p.status !== 'listo' && !dl ? `<button class="mini" data-resume title="Continuar">${ICON.down}</button>` : ''}<button class="mini" data-del>${ICON.trash}</button></div>`).join('');
+    const packs = S.packs.map(p => `<div class="item" data-pk="${p.id}"><div class="grow"><div class="ttl">${esc(p.name)}</div><div class="sub">${esc(SOURCES[p.source]?.name || p.source)}${p.date ? ' · ' + (SOURCES[p.source]?.s2 ? 'hasta ' + p.date.split('|')[0] : p.date) : ''} · zoom ${p.zmin}–${p.zmax} · ${fmtBytes(p.bytes || 0)} · ${p.status}</div></div><button class="mini" data-show>${ICON.center}</button>${p.status !== 'listo' && !dl ? `<button class="mini" data-resume title="Continuar">${ICON.down}</button>` : ''}<button class="mini" data-del>${ICON.trash}</button></div>`).join('');
     B.innerHTML = `<div class="row" style="margin-bottom:12px;flex-wrap:wrap"><button class="btn sm" id="dlArea" ${dl ? 'disabled' : ''}>Dibujar área</button><button class="btn sm ghost" id="dlView" ${dl ? 'disabled' : ''}>Usar la vista actual</button><button class="btn sm ghost" id="dlSat" ${dl ? 'disabled' : ''}>Satélite del día</button></div>${prog}<div class="list">${packs || '<div class="empty"><b>Sin mapas descargados</b>Descarga el área donde vas a trabajar para usar el mapa sin señal. Puedes guardar varias fuentes de la misma zona (satélite, topográfico…).</div>'}</div><p class="muted" id="storageTxt" style="margin-top:12px"></p>`;
     navigator.storage?.estimate?.().then(e => { const el = $('#storageTxt'); if (el) el.textContent = `Espacio usado: ${fmtBytes(e.usage || 0)} de ${fmtBytes(e.quota || 0)} disponibles`; });
     $('#dlArea').onclick = async () => { const b = await pickArea(); if (b) newPackDialog(b); else openTab('offline'); };
@@ -994,7 +1110,7 @@ const renderSheet = () => { refreshProjectHud(); refreshMapHud();
     if (dl) { $('#dlStop').onclick = () => dl.ctrl.abort(); renderDlProgress(); }
     B.querySelectorAll('[data-pk]').forEach(el => {
       const p = S.packs.find(x => x.id === el.dataset.pk);
-      el.querySelector('[data-show]').onclick = () => { closeSheet(); if (p.date) { S.settings.satDate = p.date; } if (SOURCES[p.source]?.overlay) { S.settings.overlays[p.source] = true; overlayLayer(p.source); } else setBase(p.source); map.fitBounds(p.bounds); if (selRect) map.removeLayer(selRect); selRect = L.rectangle(p.bounds, { color: '#D9B45B', weight: 2, dashArray: '6 6', fill: false, interactive: false }).addTo(map); setTimeout(() => { if (selRect) { map.removeLayer(selRect); selRect = null; } }, 4000); };
+      el.querySelector('[data-show]').onclick = () => { closeSheet(); if (p.date) { const ps = SOURCES[p.source]; if (ps?.time) S.settings.satTime = p.date; else if (ps?.s2) { const [to, days, cc, order] = p.date.split('|'); Object.assign(S.settings, { s2To: to, s2Days: +days, s2MaxCC: +cc, s2Order: order }); } else S.settings.satDate = p.date; } if (SOURCES[p.source]?.overlay) { S.settings.overlays[p.source] = true; overlayLayer(p.source); } else setBase(p.source); map.fitBounds(p.bounds); if (selRect) map.removeLayer(selRect); selRect = L.rectangle(p.bounds, { color: '#D9B45B', weight: 2, dashArray: '6 6', fill: false, interactive: false }).addTo(map); setTimeout(() => { if (selRect) { map.removeLayer(selRect); selRect = null; } }, 4000); };
       const rs = el.querySelector('[data-resume]'); if (rs) rs.onclick = () => runDownload(p);
       el.querySelector('[data-del]').onclick = async () => { if (!confirm(`¿Eliminar "${p.name}"? Si otros mapas usan la misma fuente y fecha, también se borrarán sus teselas.`)) return; await tilesDeletePrefix(cacheId(p.source, p.date) + '/'); await delPack(p.id); S.packs = S.packs.filter(x => x.id !== p.id); renderSheet(); toast('Mapa eliminado'); };
     });
@@ -1005,13 +1121,15 @@ const renderSheet = () => { refreshProjectHud(); refreshMapHud();
     <div class="card"><b>Precisión mínima del GPS</b><div class="muted">Se ignoran lecturas peores a <span id="mAccV">${S.settings.minAcc}</span> m. Bajo árboles o edificios puedes subirlo.</div><input type="range" min="10" max="150" step="5" value="${S.settings.minAcc}" id="mAcc"></div>
     <div class="card"><b>Almacenamiento persistente</b><div class="muted">Evita que el sistema borre tus mapas descargados</div><button class="btn sm ghost" id="mPersist" style="margin-top:8px">Solicitar</button></div>
     <div class="card"><b>Copia de seguridad</b><div class="muted">Exporta todas las carpetas, proyectos, rutas y puntos a un archivo</div><div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm ghost" id="mBackup">Exportar respaldo</button><button class="btn sm ghost" id="mRestore">Restaurar respaldo</button></div></div>
+    <div class="card modern-feature"><b>Sentinel-2 · 10 m (cuenta Copernicus)</b><div class="muted">${s2Ready() ? 'Configurado. Imágenes de 10 m con filtro de nubes de los últimos ' + s2Cfg().days + ' días.' : 'La mejor calidad gratuita: calles principales y lotes, pase cada 5 días, filtro de nubes. Necesita tu ID gratuito de Copernicus.'}</div><div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm" id="mS2">${s2Ready() ? 'Cambiar cuenta' : 'Configurar'}</button><button class="btn sm ghost" id="mS2Guide">Guía paso a paso</button></div></div>
     <div class="card modern-feature"><b>Mapas offline</b><div class="muted">Administra las áreas descargadas para trabajo sin señal.</div><button class="btn sm ghost" id="mOffline" style="margin-top:8px">Abrir mapas offline</button></div><div class="card"><b>Intercambio GIS</b><div class="muted">Importa Shape/KML/KMZ/GPX/GeoJSON y exporta toda la información en formatos GIS.</div><div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm ghost" id="mImportGis">Importar GIS</button><button class="btn sm ghost" id="mKml">KML</button><button class="btn sm ghost" id="mKmz">KMZ</button><button class="btn sm ghost" id="mShp">Shape</button></div></div><div class="card"><b>Reporte general</b><div class="muted">Genera una lámina cartográfica profesional con simbología, norte, escala, rutas, capas y puntos.</div><div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm" id="mPdf">Generar PDF</button><button class="btn sm ghost" id="mPrint">Imprimir</button></div></div>
-    <div class="card about"><b>TerraPin</b> <span class="muted">v4.0 · Obsidian Glass</span><p>Mapas sin conexión, satélite en vivo (NASA), grabación de rutas GPS, navegación híbrida, medición y proyectos por carpetas.</p><p><b>Desarrollada por Jesús Reynaldo Ordoñez Pech.</b></p><p class="muted">Mapas: OpenStreetMap y colaboradores, CARTO, Esri, OpenTopoMap, CyclOSM, OpenRailwayMap, NASA GIBS/FIRMS, Sentinel-2 cloudless (EOX, CC BY-NC-SA). Respeta las condiciones de uso de cada proveedor al descargar áreas grandes.</p></div>`;
+    <div class="card about"><b>TerraPin</b> <span class="muted">v4.2 · Obsidian Glass</span><p>Mapas sin conexión, satélite en vivo (NASA), grabación de rutas GPS, navegación híbrida, medición y proyectos por carpetas.</p><p><b>Desarrollada por Jesús Reynaldo Ordoñez Pech.</b></p><p class="muted">Mapas: OpenStreetMap y colaboradores, CARTO, Esri, OpenTopoMap, CyclOSM, OpenRailwayMap, NASA GIBS/FIRMS, NOAA GOES-East, NASA HLS, Copernicus Sentinel-2 cloudless (EOX, CC BY-NC-SA). Respeta las condiciones de uso de cada proveedor al descargar áreas grandes.</p></div>`;
     $('#mTheme').onclick = () => { setTheme(S.settings.theme === 'dark' ? 'light' : 'dark'); renderSheet(); };
     $('#mFollow').onclick = () => { S.settings.autoFollow = !S.settings.autoFollow; save(); renderSheet(); };
     $('#mAcc').oninput = e => { S.settings.minAcc = +e.target.value; $('#mAccV').textContent = e.target.value; }; $('#mAcc').onchange = save;
     $('#mPersist').onclick = async () => { const ok = await navigator.storage?.persist?.(); toast(ok ? 'Almacenamiento protegido' : 'El navegador no lo permitió'); };
     $('#mBackup').onclick = () => download('terrapin-respaldo.json', JSON.stringify({ v: 2, folders: S.folders, projects: S.projects, waypoints: S.waypoints, tracks: S.tracks, vectors:S.vectors, settings: S.settings }), 'application/json');
+    $('#mS2').onclick=openS2Setup; $('#mS2Guide').onclick=()=>openModal(s2Guide());
     $('#mOffline').onclick=()=>openTab('offline'); $('#mImportGis').onclick=()=>$('#fileIn').click(); $('#mKml').onclick=()=>exportProjectKML(null); $('#mKmz').onclick=()=>exportProjectKMZ(null); $('#mShp').onclick=()=>exportProjectShape(null); $('#mPdf').onclick = () => shareOrDownloadPdf(null); $('#mPrint').onclick = () => printReport(null);
     $('#mRestore').onclick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = '.json'; i.onchange = async () => { try { const j = JSON.parse(await i.files[0].text()); S.folders = j.folders || []; S.projects = j.projects || []; S.waypoints = j.waypoints || []; S.vectors=j.vectors||[]; for (const t of j.tracks || []) await putTrack(t); S.tracks = await allTracks(); await save(); syncOrder(); S.tracks.forEach(drawTrack); S.vectors.forEach(drawVector); drawWaypoints(); renderSheet(); toast('Respaldo restaurado'); } catch { toast('Archivo no válido'); } }; i.click(); };
   }
@@ -1036,9 +1154,11 @@ $('#btnTheme').onclick = () => setTheme(S.settings.theme === 'dark' ? 'light' : 
   const pending = await kvGet('recording', null);
   if (pending && pending.points.length) { if (confirm('Había una grabación en curso. ¿Continuarla?')) { startRec(pending); $('#sDist').textContent = fmtDist(pending.dist); } else await kvSet('recording', null); }
   window.addEventListener('online', () => toast('Conexión restablecida')); window.addEventListener('offline', () => toast('Sin conexión: se usarán los mapas descargados'));
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=4.0', {updateViaCache:'none'}).then(r=>r.update()).catch(() => { });
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=4.2', {updateViaCache:'none'}).then(r=>r.update()).catch(() => { });
   L.control.scale({ imperial: false, maxWidth: 120, position: 'bottomleft' }).addTo(map);
   renderSatPanel();
+  if (S.settings.base === 'goesEast' && S.settings.satAuto) useLatestGoes(true);
+  window.addEventListener('online', () => { if (S.settings.base === 'goesEast' && S.settings.satAuto) useLatestGoes(true); });
   refreshProjectHud(); refreshMapHud();
   sheet.classList.remove('open'); S.tab = null; setIdleNav();
   setTimeout(() => $('#splash').classList.add('hide'), 900);

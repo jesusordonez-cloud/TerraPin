@@ -1,5 +1,5 @@
 /* TerraPin 4.0 — shell offline actualizable. */
-const CACHE = 'terrapin-shell-v4.0';
+const CACHE = 'terrapin-shell-v4.2';
 const SHELL = [
   './', './index.html', './app.js', './manifest.json', './icon-192.png', './icon-512.png', './jspdf.umd.min.js', './shp.min.js', './shpwrite.js', './jszip.min.js',
   './leaflet/leaflet.js', './leaflet/leaflet.css', './leaflet/images/marker-icon.png', './leaflet/images/marker-icon-2x.png', './leaflet/images/marker-shadow.png'

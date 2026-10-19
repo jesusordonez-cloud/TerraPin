@@ -164,6 +164,34 @@ svg{display:block}
 .satpanel .x{position:absolute;right:10px;top:10px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:var(--ink2)}
 .satpanel .note{font-size:11px;color:var(--ink3);margin-top:8px;line-height:1.35}
 
+/* sello de fecha/hora de imagen satelital */
+.satstamp{position:fixed;left:12px;top:calc(var(--sat) + 112px);z-index:19;display:none;align-items:center;gap:7px;height:30px;padding:0 12px 0 10px;border-radius:999px;font-size:11.5px;font-weight:700;color:var(--ink);max-width:calc(100% - 84px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+.satstamp.show{display:flex}
+.satstamp::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--trail);box-shadow:0 0 8px var(--trail);flex:none;animation:blink 1.6s infinite}
+.satstamp.cloudfree::before{background:var(--gold);box-shadow:0 0 8px var(--gold);animation:none}
+.satpanel .srcs button.rt{border-color:rgba(228,87,46,.45)}
+.satpanel .srcs button.rt.active{border-color:var(--gold)}
+.satpanel .cloudfree{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 11px;border-radius:12px;background:var(--glass3);border:1px solid transparent;margin-bottom:10px}
+.satpanel .cloudfree b{display:block;font-size:13px}
+.satpanel .cloudfree small{display:block;font-size:11px;color:var(--ink2);line-height:1.25}
+.satpanel .cloudfree .sw{width:38px;height:22px;border-radius:999px;background:var(--glass3);box-shadow:0 0 0 1px var(--edge) inset;position:relative;flex:none}
+.satpanel .cloudfree .sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--ink2);transition:transform .2s}
+.satpanel .cloudfree.active{border-color:var(--gold);background:var(--goldSoft)}
+.satpanel .cloudfree.active .sw{box-shadow:0 0 0 1px var(--gold) inset}
+.satpanel .cloudfree.active .sw::after{transform:translateX(16px);background:var(--gold)}
+.satpanel{top:calc(var(--sat) + 150px);max-height:calc(100% - var(--sat) - 150px - var(--tp34-stack-clear) + 60px);overflow:auto;scrollbar-width:none}.satpanel::-webkit-scrollbar{display:none}
+.satpanel .srcs{grid-template-columns:1fr 1fr 1fr}.satpanel .srcs button{padding:7px 8px;font-size:12px}.satpanel .srcs button small{font-size:10px}
+.hint{top:calc(var(--sat) + 150px)}
+
+/* chips de parámetros y pases */
+.satpanel .dates .lbl{font-size:11px;font-weight:700;color:var(--ink3);width:100%;margin:2px 0 -2px}
+.satpanel .passes{width:100%;display:flex;gap:6px;flex-wrap:wrap}
+.satpanel .passes small{font-size:11px;color:var(--ink3);width:100%}
+.satpanel .srcs button.setup{border-style:dashed;border-color:var(--edge2)}
+.satpanel .dates button.setup{background:var(--goldGrad);color:#1B1507;width:100%;height:36px}
+.guide{padding-left:20px;margin:0 0 10px;font-size:14px;line-height:1.5}
+.guide li{margin-bottom:6px}
+
 /* ---------- bloque inferior ---------- */
 .bottom-stack{position:fixed;left:0;right:0;bottom:0;z-index:25;display:flex;flex-direction:column;align-items:center;gap:8px;padding:0 12px;pointer-events:none}
 .bottom-stack>*{pointer-events:auto}
@@ -650,17 +678,22 @@ input[type=range]{width:100%;accent-color:var(--gold);margin:8px 0 0}
 <div class="basemap-quick glass" id="basemapQuick">
   <button data-basequick="cartoVoyager"><i></i>Calles</button>
   <button data-basequick="esriSat"><i></i>Satélite HD</button>
+  <button data-basequick="goesEast" class="live"><i></i>En vivo</button>
   <button data-basequick="nasaViirs" class="live"><i></i>Satélite hoy</button>
+  <button data-basequick="hlsS30" class="live"><i></i>HLS 30 m</button>
+  <button data-basequick="sentinel2" class="live"><i></i>Sentinel-2</button>
   <button data-basequick="esriTopo"><i></i>Topográfico</button>
   <button data-basequick="openTopo"><i></i>Curvas</button>
 </div>
 
+<button class="satstamp glass" id="satStamp" aria-label="Fecha y hora de la imagen satelital"></button>
 <div class="satpanel glass" id="satPanel">
   <button class="x" id="satClose" aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   <h3><i></i>Satélite en vivo</h3>
-  <div class="sub">Imágenes diarias de la NASA, gratuitas. Elige el día y guárdalo para usarlo sin señal.</div>
+  <div class="sub">Imágenes gratuitas de NOAA y NASA. Elige satélite y momento, o quita las nubes, y guárdalo para usarlo sin señal.</div>
   <div class="srcs" id="satSources"></div>
   <div class="dates" id="satDates"></div>
+  <button class="cloudfree" id="satCloudFree"><span class="sw"></span><span><b>Sin nubes</b><small>Cambia al mosaico Sentinel-2 (10 m), compuesto sin nubes</small></span></button>
   <div class="actions"><button class="btn sm ghost" id="satShow">Ver en el mapa</button><button class="btn sm" id="satDownload">Guardar esta vista offline</button></div>
   <div class="note" id="satNote"></div>
 </div>
