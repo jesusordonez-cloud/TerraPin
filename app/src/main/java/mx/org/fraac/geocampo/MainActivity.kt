@@ -88,6 +88,8 @@ private fun GeoCampoScreen(vm: MainViewModel) {
 
     var baseMapMode by remember { mutableStateOf(BaseMapMode.MAP) }
     var activeOpenAerialMap by remember { mutableStateOf<OpenAerialMapImagery?>(null) }
+    var liveSatelliteMode by remember { mutableStateOf(LiveSatelliteMode.OFF) }
+    var liveSatelliteOpacity by remember { mutableFloatStateOf(0.78f) }
     var offlineDialogInitialSource by remember {
         mutableStateOf(OfflineImagerySource.SENTINEL)
     }
@@ -391,6 +393,8 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                             openAerialMapImagery
                         },
                     baseMapMode = baseMapMode,
+                    liveSatelliteMode = liveSatelliteMode,
+                    liveSatelliteOpacity = liveSatelliteOpacity,
                     fieldRoute = fieldRoute,
                     centerOnLocationToken = centerOnLocationToken,
                     snapshotBridge = snapshotBridge,
@@ -551,6 +555,7 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                         onClick = { showImageryDialog = true },
                         containerColor =
                             if (
+                                liveSatelliteMode != LiveSatelliteMode.OFF ||
                                 baseMapMode == BaseMapMode.SATELLITE_ONLINE ||
                                 baseMapMode == BaseMapMode.INEGI_ORTHO ||
                                 baseMapMode == BaseMapMode.OPENAERIALMAP
@@ -569,6 +574,7 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                             contentDescription = "Proveedor satelital",
                             tint =
                                 if (
+                                    liveSatelliteMode != LiveSatelliteMode.OFF ||
                                     baseMapMode == BaseMapMode.SATELLITE_ONLINE ||
                                     baseMapMode == BaseMapMode.INEGI_ORTHO ||
                                     baseMapMode == BaseMapMode.OPENAERIALMAP
@@ -677,6 +683,40 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                     }
                 }
 
+                if (liveSatelliteMode != LiveSatelliteMode.OFF) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(
+                                start = 10.dp,
+                                bottom =
+                                    if (
+                                        baseMapMode != BaseMapMode.MAP &&
+                                        baseMapMode != BaseMapMode.NONE
+                                    ) {
+                                        46.dp
+                                    } else {
+                                        10.dp
+                                    }
+                            ),
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                    ) {
+                        Text(
+                            when (liveSatelliteMode) {
+                                LiveSatelliteMode.GOES_GEOCOLOR ->
+                                    "GOES GeoColor · CASI EN VIVO · NOAA/NESDIS"
+                                LiveSatelliteMode.VIIRS_NOAA21 ->
+                                    "VIIRS NOAA‑21 · RECIENTE · NASA GIBS"
+                                LiveSatelliteMode.OFF -> ""
+                            },
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
                 fieldRoute?.let { route ->
                     ElevatedCard(
                         modifier = Modifier
@@ -778,6 +818,8 @@ private fun GeoCampoScreen(vm: MainViewModel) {
     if (showImageryDialog) {
         ImageryProviderDialog(
             currentMode = baseMapMode,
+            liveSatelliteMode = liveSatelliteMode,
+            liveSatelliteOpacity = liveSatelliteOpacity,
             openAerialMapImagery = openAerialMapImagery,
             onDismiss = { showImageryDialog = false },
             onUseSentinel = {
@@ -795,6 +837,22 @@ private fun GeoCampoScreen(vm: MainViewModel) {
                     baseMapMode = BaseMapMode.OPENAERIALMAP
                     showImageryDialog = false
                 }
+            },
+            onUseGoesGeoColor = {
+                liveSatelliteMode = LiveSatelliteMode.GOES_GEOCOLOR
+                showImageryDialog = false
+                vm.notifyUser("GOES GeoColor activado. Se requiere internet para actualizar la imagen.")
+            },
+            onUseViirsNoaa21 = {
+                liveSatelliteMode = LiveSatelliteMode.VIIRS_NOAA21
+                showImageryDialog = false
+                vm.notifyUser("VIIRS NOAA‑21 activado. Se mostrará la imagen reciente disponible.")
+            },
+            onDisableLiveSatellite = {
+                liveSatelliteMode = LiveSatelliteMode.OFF
+            },
+            onLiveSatelliteOpacityChanged = {
+                liveSatelliteOpacity = it
             },
             onDownloadSentinel = {
                 offlineDialogInitialSource = OfflineImagerySource.SENTINEL
