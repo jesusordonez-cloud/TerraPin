@@ -15,11 +15,17 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun ImageryProviderDialog(
     currentMode: BaseMapMode,
+    liveSatelliteMode: LiveSatelliteMode,
+    liveSatelliteOpacity: Float,
     openAerialMapImagery: OpenAerialMapImagery?,
     onDismiss: () -> Unit,
     onUseSentinel: () -> Unit,
     onUseInegi: () -> Unit,
     onUseOpenAerialMap: () -> Unit,
+    onUseGoesGeoColor: () -> Unit,
+    onUseViirsNoaa21: () -> Unit,
+    onDisableLiveSatellite: () -> Unit,
+    onLiveSatelliteOpacityChanged: (Float) -> Unit,
     onDownloadSentinel: () -> Unit,
     onDownloadInegi: () -> Unit,
     onDownloadOpenAerialMap: () -> Unit
@@ -35,6 +41,92 @@ fun ImageryProviderDialog(
                 modifier = Modifier.heightIn(max = 650.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor =
+                            if (liveSatelliteMode != LiveSatelliteMode.OFF) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            }
+                    )
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Default.SatelliteAlt, null)
+                            Column {
+                                Text(
+                                    "Satélite reciente / casi en vivo",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Text(
+                                    "GOES GeoColor de NOAA se actualiza aproximadamente cada 10–15 min. VIIRS NOAA‑21 ofrece una vista reciente de mayor detalle, con actualización diaria.",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = onUseGoesGeoColor,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    if (liveSatelliteMode == LiveSatelliteMode.GOES_GEOCOLOR) {
+                                        "GOES activo"
+                                    } else {
+                                        "GOES"
+                                    }
+                                )
+                            }
+
+                            FilledTonalButton(
+                                onClick = onUseViirsNoaa21,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    if (liveSatelliteMode == LiveSatelliteMode.VIIRS_NOAA21) {
+                                        "VIIRS activo"
+                                    } else {
+                                        "VIIRS"
+                                    }
+                                )
+                            }
+                        }
+
+                        if (liveSatelliteMode != LiveSatelliteMode.OFF) {
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                "Opacidad ${(liveSatelliteOpacity * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Slider(
+                                value = liveSatelliteOpacity,
+                                onValueChange = onLiveSatelliteOpacityChanged,
+                                valueRange = 0.2f..1f
+                            )
+                            OutlinedButton(
+                                onClick = onDisableLiveSatellite,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Ocultar capa satelital")
+                            }
+                        }
+
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Requiere conexión a internet. No es video en tiempo real: TerraPin muestra la imagen más reciente disponible del proveedor.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
                 if (openAerialMapImagery != null) {
                     Card(
                         colors = CardDefaults.cardColors(
