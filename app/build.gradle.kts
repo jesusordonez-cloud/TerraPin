@@ -12,8 +12,8 @@ android {
         applicationId = "mx.org.fraac.geocampo"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "0.5.8"
+        versionCode = 19
+        versionName = "0.5.9"
     }
 
     buildFeatures { compose = true }
