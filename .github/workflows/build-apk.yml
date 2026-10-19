@@ -15,16 +15,6 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
 
-      # GitHub-hosted Ubuntu runners ya incluyen Android SDK.
-      # Se evita android-actions/setup-android@v3 porque intenta instalar
-      # el paquete obsoleto "tools", retirado del repositorio del SDK.
-      - name: Verificar Android SDK del runner
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          test -d "$ANDROID_HOME"
-          command -v sdkmanager
-          sdkmanager --version
-
       - name: Instalar dependencias
         run: npm install
 
