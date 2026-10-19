@@ -1,0 +1,7 @@
+{
+  "appId": "com.jesusordonez.terrapin",
+  "appName": "TerraPin",
+  "webDir": "www",
+  "android": { "allowMixedContent": false },
+  "server": { "androidScheme": "https" }
+}

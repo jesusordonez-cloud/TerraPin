@@ -1,0 +1,26 @@
+{
+  "name": "TerraPin — Mapas sin conexión y rutas GPS",
+  "short_name": "TerraPin",
+  "description": "TerraPin 4.0 — SIG de campo premium: satélite en vivo (NASA), mapas offline, rutas GPS, navegación híbrida y proyectos.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0C1512",
+  "theme_color": "#0C1512",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
