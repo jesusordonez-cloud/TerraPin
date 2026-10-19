@@ -33,6 +33,7 @@ import org.maplibre.android.style.layers.PropertyFactory.fillOpacity
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineOpacity
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
+import org.maplibre.android.style.layers.PropertyFactory.rasterOpacity
 import org.maplibre.android.style.layers.RasterLayer
 import org.maplibre.android.style.sources.ImageSource
 import org.maplibre.android.style.sources.RasterSource
@@ -45,6 +46,12 @@ enum class BaseMapMode {
     SATELLITE_OFFLINE,
     INEGI_ORTHO,
     OPENAERIALMAP
+}
+
+enum class LiveSatelliteMode {
+    OFF,
+    GOES_GEOCOLOR,
+    VIIRS_NOAA21
 }
 
 class MapSnapshotBridge {
@@ -67,6 +74,8 @@ fun OfflineMapView(
     satelliteOffline: PmTilesBasemap?,
     openAerialMapImagery: OpenAerialMapImagery?,
     baseMapMode: BaseMapMode,
+    liveSatelliteMode: LiveSatelliteMode,
+    liveSatelliteOpacity: Float,
     fieldRoute: FieldRoutePlan?,
     centerOnLocationToken: Int,
     snapshotBridge: MapSnapshotBridge,
@@ -162,7 +171,9 @@ fun OfflineMapView(
         basemap?.path,
         satelliteOffline?.path,
         openAerialMapImagery?.id,
-        baseMapMode
+        baseMapMode,
+        liveSatelliteMode,
+        liveSatelliteOpacity
     ) {
         val targetMap = map ?: return@LaunchedEffect
         val styleJson = when (baseMapMode) {
@@ -193,8 +204,21 @@ fun OfflineMapView(
                 }
             }
 
+            if (liveSatelliteMode != LiveSatelliteMode.OFF) {
+                runCatching {
+                    upsertLiveSatelliteOverlay(
+                        style = style,
+                        map = targetMap,
+                        mapView = mapView,
+                        mode = liveSatelliteMode,
+                        opacity = liveSatelliteOpacity
+                    )
+                }
+            }
+
             if (
-                (baseMapMode == BaseMapMode.SATELLITE_ONLINE ||
+                (liveSatelliteMode != LiveSatelliteMode.OFF ||
+                    baseMapMode == BaseMapMode.SATELLITE_ONLINE ||
                     baseMapMode == BaseMapMode.SATELLITE_OFFLINE ||
                     baseMapMode == BaseMapMode.INEGI_ORTHO ||
                     baseMapMode == BaseMapMode.OPENAERIALMAP) &&
@@ -266,6 +290,55 @@ fun OfflineMapView(
             targetMap.addOnCameraIdleListener(listener)
             mapView.post {
                 runCatching { updateInegiOrtho(targetMap, mapView) }
+            }
+
+            onDispose {
+                targetMap.removeOnCameraIdleListener(listener)
+            }
+        }
+    }
+
+    DisposableEffect(
+        map,
+        liveSatelliteMode,
+        liveSatelliteOpacity,
+        styleEpoch
+    ) {
+        val targetMap = map
+        if (
+            targetMap == null ||
+            liveSatelliteMode == LiveSatelliteMode.OFF ||
+            styleEpoch == 0
+        ) {
+            onDispose { }
+        } else {
+            val listener = MapLibreMap.OnCameraIdleListener {
+                targetMap.getStyle { style ->
+                    runCatching {
+                        upsertLiveSatelliteOverlay(
+                            style = style,
+                            map = targetMap,
+                            mapView = mapView,
+                            mode = liveSatelliteMode,
+                            opacity = liveSatelliteOpacity
+                        )
+                    }
+                }
+            }
+
+            targetMap.addOnCameraIdleListener(listener)
+            mapView.post {
+                targetMap.getStyle { style ->
+                    runCatching {
+                        upsertLiveSatelliteOverlay(
+                            style = style,
+                            map = targetMap,
+                            mapView = mapView,
+                            mode = liveSatelliteMode,
+                            opacity = liveSatelliteOpacity
+                        )
+                    }
+                }
             }
 
             onDispose {
@@ -724,6 +797,93 @@ private fun updateInegiOrtho(
 
 private const val INEGI_SOURCE_ID = "inegi-ortofoto-source"
 private const val INEGI_LAYER_ID = "inegi-ortofoto-layer"
+
+private fun upsertLiveSatelliteOverlay(
+    style: Style,
+    map: MapLibreMap,
+    mapView: MapView,
+    mode: LiveSatelliteMode,
+    opacity: Float
+) {
+    if (mode == LiveSatelliteMode.OFF) return
+
+    val bounds = map.projection.visibleRegion.latLngBounds
+    val west = bounds.longitudeWest
+    val east = bounds.longitudeEast
+    val south = bounds.latitudeSouth
+    val north = bounds.latitudeNorth
+
+    if (
+        !west.isFinite() || !east.isFinite() ||
+        !south.isFinite() || !north.isFinite() ||
+        west >= east || south >= north
+    ) return
+
+    val width = mapView.width.coerceIn(512, 1280)
+    val height = mapView.height.coerceIn(512, 1280)
+
+    val bbox = String.format(
+        Locale.US,
+        "%.8f,%.8f,%.8f,%.8f",
+        west,
+        south,
+        east,
+        north
+    )
+
+    val url = when (mode) {
+        LiveSatelliteMode.GOES_GEOCOLOR ->
+            "https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/" +
+                "MERGEDGC_Last_24hr/ImageServer/exportImage?" +
+                "bbox=$bbox&bboxSR=4326&size=$width,$height" +
+                "&imageSR=4326&format=jpgpng&interpolation=RSP_BilinearInterpolation" +
+                "&transparent=false&f=image"
+
+        LiveSatelliteMode.VIIRS_NOAA21 ->
+            "https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?" +
+                "SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap" +
+                "&LAYERS=VIIRS_NOAA21_CorrectedReflectance_TrueColor&STYLES=" +
+                "&SRS=EPSG:4326&BBOX=$bbox" +
+                "&WIDTH=$width&HEIGHT=$height" +
+                "&FORMAT=image/jpeg&TRANSPARENT=FALSE"
+
+        LiveSatelliteMode.OFF -> return
+    }
+
+    val quad = LatLngQuad(
+        LatLng(north, west),
+        LatLng(north, east),
+        LatLng(south, east),
+        LatLng(south, west)
+    )
+
+    val source = style.getSource(LIVE_SATELLITE_SOURCE_ID) as? ImageSource
+    if (source == null) {
+        style.addSource(
+            ImageSource(
+                LIVE_SATELLITE_SOURCE_ID,
+                quad,
+                URI(url)
+            )
+        )
+        style.addLayer(
+            RasterLayer(
+                LIVE_SATELLITE_LAYER_ID,
+                LIVE_SATELLITE_SOURCE_ID
+            ).apply {
+                setProperties(rasterOpacity(opacity.coerceIn(0.2f, 1f)))
+            }
+        )
+    } else {
+        source.setCoordinates(quad)
+        source.setUri(url)
+        (style.getLayer(LIVE_SATELLITE_LAYER_ID) as? RasterLayer)
+            ?.setProperties(rasterOpacity(opacity.coerceIn(0.2f, 1f)))
+    }
+}
+
+private const val LIVE_SATELLITE_SOURCE_ID = "terrapin-live-satellite-source"
+private const val LIVE_SATELLITE_LAYER_ID = "terrapin-live-satellite-layer"
 
 private fun openAerialMapStyle(imagery: OpenAerialMapImagery): String {
     val tile = imagery.tileTemplate
