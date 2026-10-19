@@ -25,6 +25,16 @@ Cobertura global abierta. Se mantiene como respaldo online y como fuente descarg
 
 El mapa vectorial PMTiles puede superponer caminos y límites sobre las imágenes.
 
+## Satélite reciente / casi en vivo
+
+TerraPin 0.5.9 incorpora una capa satelital opcional que se superpone al mapa sin sustituir las capas de campo:
+
+- **GOES GeoColor (NOAA/NESDIS):** imagen de cobertura amplia con actualización aproximada cada 10–15 minutos. Requiere conexión a internet.
+- **VIIRS NOAA-21 (NASA GIBS):** imagen reciente de mayor detalle relativo, con actualización diaria.
+- La capa puede activarse, ocultarse y ajustar su opacidad desde el selector de imágenes.
+- Los caminos, límites, puntos, recorridos y rutas de TerraPin permanecen visibles sobre la imagen.
+- No se presenta como video en tiempo real; la aplicación consulta la imagen más reciente disponible del proveedor.
+
 ## Compatibilidad
 
 El applicationId se conserva como:
