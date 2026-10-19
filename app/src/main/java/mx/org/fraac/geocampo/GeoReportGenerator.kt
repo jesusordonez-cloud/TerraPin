@@ -195,6 +195,7 @@ class GeoReportGenerator(
             canvas,
             "Mapa base",
             when (baseMapMode) {
+                BaseMapMode.NONE -> "Sin mapa base"
                 BaseMapMode.MAP -> "Cartográfico / PMTiles"
                 BaseMapMode.SATELLITE_ONLINE -> "Sentinel-2 online + calles"
                 BaseMapMode.SATELLITE_OFFLINE -> "Sentinel-2 offline + calles"
