@@ -430,6 +430,27 @@ input[type=range]{width:100%;accent-color:var(--gold);margin:8px 0 0}
 .toast.show{opacity:1;visibility:visible;transform:translate(-50%,0)}
 .hint{position:fixed;left:50%;top:calc(var(--sat) + 118px);transform:translateX(-50%);z-index:22;background:#1B1507;color:var(--gold2);padding:9px 16px;border-radius:999px;font-size:13px;font-weight:700;box-shadow:0 0 0 1px var(--gold),0 8px 24px rgba(0,0,0,.4);display:none;max-width:calc(100% - 40px);text-align:center}
 .hint.show{display:block}
+.areabar{position:fixed;left:50%;top:calc(var(--sat) + 118px);transform:translateX(-50%);z-index:22;display:none;flex-direction:column;gap:8px;padding:10px 12px;border-radius:18px;max-width:calc(100% - 24px);width:360px}
+.areabar.show{display:flex}
+.area-hint{font-size:12px;font-weight:700;color:var(--gold2);text-align:center;line-height:1.3}
+.area-stats{display:grid;grid-template-columns:1.3fr 1fr .7fr;gap:8px}
+.area-stats div{display:flex;flex-direction:column;min-width:0}
+.area-stats b{font-size:15px;color:var(--gold2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.area-stats span{font-size:11px;color:var(--ink3)}
+.area-actions{display:flex;gap:6px}
+.area-actions button{height:34px;padding:0 10px;border-radius:999px;background:var(--glass3);font-size:12px;font-weight:700;color:var(--ink);white-space:nowrap}
+.area-actions button.ok{background:var(--goldGrad);color:#1B1507;flex:1}
+.area-actions button.x{width:34px;padding:0;flex:none}
+.marker-vx{width:14px;height:14px;border-radius:50%;background:var(--gold);border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.5)}
+.marker-vx.first{background:#fff;border-color:var(--gold);width:18px;height:18px}
+.vec-measure{font-size:12px;color:var(--ink2);margin:4px 0 6px;line-height:1.45}
+.satpanel .dates select{height:30px;border-radius:999px;border:1px solid var(--edge);background:var(--glass3);padding:0 10px;font-size:12px;color:var(--ink);width:100%}
+.satpanel .passes.wayback button{height:28px;padding:0 9px;font-size:11px}
+.style-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+.style-row label{font-size:11px;color:var(--ink3);display:flex;justify-content:space-between}
+.layer-style{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:2px}
+.layer-style label{font-size:10px;color:var(--ink3);display:block;line-height:1}
+.layer-style input[type=range]{margin:0;height:16px}
 .selbox{position:fixed;inset:0;z-index:18;display:none;cursor:crosshair;touch-action:none}
 .selbox.on{display:block}
 
@@ -599,6 +620,11 @@ input[type=range]{width:100%;accent-color:var(--gold);margin:8px 0 0}
 .map-sheet-main{display:block!important;position:relative!important}
 .map-widget{position:absolute;z-index:8;box-sizing:border-box;touch-action:none}
 .map-widget.selected{outline:2px dashed #1687FF;outline-offset:2px}
+.map-widget.text-widget{background:rgba(255,255,255,.84);border-radius:5px;padding:4px 7px;font-weight:800;color:#16201a;line-height:1.25;min-width:40px;cursor:move}
+.map-widget.text-widget .text-widget-inner{outline:none;white-space:pre-wrap;word-break:break-word;cursor:text;min-height:1em}
+.map-widget .widget-del{position:absolute;left:-7px;top:-7px;width:20px;height:20px;border-radius:50%;display:none;place-items:center;background:#D23B3B;color:#fff;border:2px solid #fff;font-size:11px;font-weight:800;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer}
+.map-widget.selected .widget-del{display:grid}
+.map-widget .widget-move{cursor:move}
 .map-widget .widget-resize{position:absolute;right:-6px;bottom:-6px;width:15px;height:15px;border-radius:50%;background:#1687FF;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:nwse-resize}
 .map-widget .widget-move{position:absolute;right:-7px;top:-7px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#1687FF;color:#fff;border:2px solid #fff;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 
@@ -668,6 +694,11 @@ input[type=range]{width:100%;accent-color:var(--gold);margin:8px 0 0}
 <div id="map"></div>
 <div id="selbox" class="selbox"></div>
 <div id="hint" class="hint"></div>
+<div class="areabar glass" id="areaBar">
+  <div class="area-hint" id="areaHint"></div>
+  <div class="area-stats"><div><b id="areaHa">0 ha</b><span id="areaM2">0 m²</span></div><div><b id="areaPerim">0 m</b><span>perímetro</span></div><div><b id="areaPts">0</b><span>vértices</span></div></div>
+  <div class="area-actions"><button id="areaGps" title="Agregar mi posición GPS como vértice">+ GPS</button><button id="areaUndo">Deshacer</button><button class="ok" id="areaSave">Cerrar y guardar</button><button class="x" id="areaCancel" aria-label="Cancelar">✕</button></div>
+</div>
 
 <div class="topbar">
   <div class="brand glass"><span class="logo"><img src="icon-192.png" alt=""></span><span class="brandcopy"><b>TerraPin</b><small id="projectHud">Sin proyecto activo</small></span></div>
@@ -678,6 +709,8 @@ input[type=range]{width:100%;accent-color:var(--gold);margin:8px 0 0}
 <div class="basemap-quick glass" id="basemapQuick">
   <button data-basequick="cartoVoyager"><i></i>Calles</button>
   <button data-basequick="esriSat"><i></i>Satélite HD</button>
+  <button data-basequick="googleSat"><i></i>Google</button>
+  <button data-basequick="esriWayback" class="live"><i></i>Por fecha</button>
   <button data-basequick="goesEast" class="live"><i></i>En vivo</button>
   <button data-basequick="nasaViirs" class="live"><i></i>Satélite hoy</button>
   <button data-basequick="hlsS30" class="live"><i></i>HLS 30 m</button>
@@ -690,10 +723,10 @@ input[type=range]{width:100%;accent-color:var(--gold);margin:8px 0 0}
 <div class="satpanel glass" id="satPanel">
   <button class="x" id="satClose" aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   <h3><i></i>Satélite en vivo</h3>
-  <div class="sub">Imágenes gratuitas de NOAA y NASA. Elige satélite y momento, o quita las nubes, y guárdalo para usarlo sin señal.</div>
+  <div class="sub">Imágenes gratuitas de NOAA, NASA, Esri y Copernicus. Elige satélite, momento o versión por fecha, quita las nubes y guárdalo para usarlo sin señal.</div>
   <div class="srcs" id="satSources"></div>
   <div class="dates" id="satDates"></div>
-  <button class="cloudfree" id="satCloudFree"><span class="sw"></span><span><b>Sin nubes</b><small>Cambia al mosaico Sentinel-2 (10 m), compuesto sin nubes</small></span></button>
+  <button class="cloudfree" id="satCloudFree"><span class="sw"></span><span><b>Sin nubes</b><small>Mosaico Sentinel-2 (10 m) sin nubes del año que elijas (2025 por defecto)</small></span></button>
   <div class="actions"><button class="btn sm ghost" id="satShow">Ver en el mapa</button><button class="btn sm" id="satDownload">Guardar esta vista offline</button></div>
   <div class="note" id="satNote"></div>
 </div>
@@ -704,6 +737,7 @@ input[type=range]{width:100%;accent-color:var(--gold);margin:8px 0 0}
   <div class="divider"></div>
   <button class="iconbtn" id="btnWp" aria-label="Agregar punto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><path d="M12 7v6M9 10h6"/></svg><span>Nuevo punto</span></button>
   <button class="iconbtn" id="btnMeasure" aria-label="Medir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17 17 3l4 4L7 21z"/><path d="m8 8 2 2M11 5l2 2M14 2l2 2M5 11l2 2"/></svg><span>Medir</span></button>
+  <button class="iconbtn" id="btnArea" aria-label="Medir área (polígono)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7 12 3l8 5-2 10-9 3-5-5z"/><circle cx="5" cy="7" r="1.6" fill="currentColor"/><circle cx="12" cy="3" r="1.6" fill="currentColor"/><circle cx="20" cy="8" r="1.6" fill="currentColor"/><circle cx="18" cy="18" r="1.6" fill="currentColor"/><circle cx="9" cy="21" r="1.6" fill="currentColor"/><circle cx="4" cy="16" r="1.6" fill="currentColor"/></svg><span>Área / polígono</span></button>
   <button class="iconbtn" id="btnLayersQuick" aria-label="Capas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg><span>Capas</span></button>
 </div>
 
