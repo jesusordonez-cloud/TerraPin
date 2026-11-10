@@ -21,10 +21,13 @@ jobs:
       - name: Crear proyecto Android (si no existe)
         run: test -d android || npx cap add android
 
-      - name: Permisos de ubicación en AndroidManifest
+      - name: Permisos de ubicación y segundo plano en AndroidManifest
         run: |
           M=android/app/src/main/AndroidManifest.xml
           grep -q ACCESS_FINE_LOCATION $M || sed -i 's#</manifest>#  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n  <uses-feature android:name="android.hardware.location.gps"/>\n</manifest>#' $M
+          grep -q FOREGROUND_SERVICE_LOCATION $M || sed -i 's#</manifest>#  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>\n  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n  <uses-permission android:name="android.permission.WAKE_LOCK"/>\n</manifest>#' $M
+          S=android/app/src/main/res/values/strings.xml
+          grep -q capacitor_background_geolocation_notification_channel_name $S || sed -i 's#</resources>#    <string name="capacitor_background_geolocation_notification_channel_name">Grabación de ruta</string>\n</resources>#' $S
 
       - name: Sincronizar web → Android
         run: npx cap sync android
@@ -35,5 +38,5 @@ jobs:
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: TerraPin-4.0-debug
+          name: TerraPin-4.4-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk

@@ -2,6 +2,11 @@
   "appId": "com.jesusordonez.terrapin",
   "appName": "TerraPin",
   "webDir": "www",
-  "android": { "allowMixedContent": false },
-  "server": { "androidScheme": "https" }
+  "android": {
+    "allowMixedContent": false,
+    "useLegacyBridge": true
+  },
+  "server": {
+    "androidScheme": "https"
+  }
 }

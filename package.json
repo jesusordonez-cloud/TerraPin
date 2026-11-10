@@ -1,8 +1,8 @@
 {
   "name": "terrapin",
-  "version": "4.0.0",
+  "version": "4.4.0",
   "private": true,
-  "description": "TerraPin 4.0 · Obsidian Glass — SIG de campo con satélite en vivo y mapas offline",
+  "description": "TerraPin 4.4 · Obsidian Glass — SIG de campo con satélite en vivo, mapas offline y grabación GPS en segundo plano",
   "scripts": {
     "add:android": "cap add android",
     "sync": "cap sync android",
@@ -12,7 +12,9 @@
   "dependencies": {
     "@capacitor/android": "^6.1.2",
     "@capacitor/core": "^6.1.2",
-    "@capacitor/geolocation": "^6.0.1"
+    "@capacitor/geolocation": "^6.0.1",
+    "@capacitor-community/background-geolocation": "1.2.26",
+    "@capacitor/local-notifications": "^6.1.0"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.1.2"

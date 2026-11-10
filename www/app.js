@@ -1,4 +1,4 @@
-/* TerraPin 4.3 · Obsidian Glass — SIG móvil de campo, satélite en vivo, navegación híbrida, mapas offline y proyectos
+/* TerraPin 4.4 · Obsidian Glass — SIG móvil de campo, satélite en vivo, navegación híbrida, mapas offline y proyectos
    Desarrollada por Jesús Reynaldo Ordoñez Pech */
 (() => {
 'use strict';
@@ -479,8 +479,26 @@ const onPos = p => {
   refreshMapHud();
 };
 const onPosErr = e => { toast(e.code === 1 ? 'Permite el acceso a la ubicación para usar el GPS' : 'Sin señal GPS: ' + e.message); $('#btnLocate').classList.remove('gps-on'); };
-const startGPS = () => { if (S.watchId != null) return; if (!navigator.geolocation) return toast('Este dispositivo no tiene GPS'); S.watchId = navigator.geolocation.watchPosition(onPos, onPosErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 30000 }); $('#btnLocate').classList.add('gps-on'); };
-const stopGPS = () => { if (S.watchId != null) navigator.geolocation.clearWatch(S.watchId); S.watchId = null; $('#btnLocate').classList.remove('gps-on'); };
+const startGPS = () => { if (S.watchId != null || S.bgWatch) return; if (!navigator.geolocation) return toast('Este dispositivo no tiene GPS'); S.watchId = navigator.geolocation.watchPosition(onPos, onPosErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 30000 }); $('#btnLocate').classList.add('gps-on'); };
+const stopGPS = () => { if (S.watchId != null) navigator.geolocation.clearWatch(S.watchId); S.watchId = null; if (!S.bgWatch) $('#btnLocate').classList.remove('gps-on'); };
+/* GPS en segundo plano (APK): servicio nativo con notificación que sigue grabando con la pantalla bloqueada o la app minimizada */
+const nativeApp = () => !!(window.Capacitor && (window.Capacitor.isNativePlatform?.() || window.Capacitor.isNative));
+const bgPlugin = () => { try { const C = window.Capacitor; if (!C || !nativeApp()) return null; return C.Plugins?.BackgroundGeolocation || (C.registerPlugin ? C.registerPlugin('BackgroundGeolocation') : null); } catch { return null; } };
+const bgAvailable = () => !!bgPlugin();
+const startBgGPS = async () => {
+  const BG = bgPlugin(); if (!BG || S.bgWatch) return !!S.bgWatch;
+  try { const LN = window.Capacitor?.Plugins?.LocalNotifications; if (LN?.requestPermissions) LN.requestPermissions().catch(() => {}); } catch {}
+  try {
+    const id = await BG.addWatcher({ backgroundTitle: 'TerraPin · grabando ruta', backgroundMessage: 'La ruta se sigue registrando con la pantalla bloqueada. Abre TerraPin para pausar o finalizar.', requestPermissions: true, stale: false, distanceFilter: 0 },
+      (loc, err) => {
+        if (err) { if (err.code === 'NOT_AUTHORIZED') { toast('Permite la ubicación “Todo el tiempo” para grabar con la pantalla bloqueada'); BG.openSettings?.().catch(() => {}); } else console.warn('BG GPS', err); return; }
+        if (!loc) return;
+        onPos({ coords: { latitude: loc.latitude, longitude: loc.longitude, accuracy: loc.accuracy ?? 50, altitude: loc.altitude ?? null, speed: loc.speed ?? null, heading: loc.bearing ?? null }, timestamp: loc.time || Date.now() });
+      });
+    S.bgWatch = id; if (S.watchId != null) { navigator.geolocation.clearWatch(S.watchId); S.watchId = null; } $('#btnLocate').classList.add('gps-on'); return true;
+  } catch (e) { console.warn('BackgroundGeolocation', e); return false; }
+};
+const stopBgGPS = async () => { const BG = bgPlugin(); const id = S.bgWatch; S.bgWatch = null; if (BG && id) { try { await BG.removeWatcher({ id }); } catch {} } $('#btnLocate').classList.remove('gps-on'); };
 $('#btnLocate').onclick = () => {
   if (S.watchId == null) { startGPS(); S.follow = true; $('#btnLocate').classList.add('active'); toast('Buscando tu ubicación…'); }
   else if (!S.follow) { S.follow = true; $('#btnLocate').classList.add('active'); if (S.me) map.setView(S.me, Math.max(map.getZoom(), 16)); }
@@ -628,13 +646,14 @@ const recPoint = p => {
   const pts = S.rec.points; const last = pts[pts.length - 1];
   if (last) { const d = hav(last, pt); if (d < 2 && pt[3] - last[3] < 30000) return; S.rec.dist += d; S.rec.lastSpeed = p.coords.speed != null ? p.coords.speed * 3.6 : d / Math.max(1, (pt[3] - last[3]) / 1000) * 3.6; }
   pts.push(pt); recLine.addLatLng([pt[0], pt[1]]);refreshRecUI();
-  if (pts.length % 5 === 0) kvSet('recording', S.rec);
+  if (S.bgWatch || pts.length % 5 === 0) kvSet('recording', S.rec);
 };
 const startRec = (resume) => {
   S.rec = resume ? Object.assign({paused:false,pausedTotal:0,pauseStarted:null,lastSpeed:0},resume) : { id: uid(), points: [], dist: 0, start: Date.now(), color: COLORS[S.tracks.length % COLORS.length], projectId: S.settings.activeProject, paused:false, pausedTotal:0, pauseStarted:null, lastSpeed:0 };
   recLine = L.polyline(S.rec.points.map(p => [p[0], p[1]]), { color: S.rec.color, weight: 5, pane: 'overlayPane' }).addTo(map);
   $('#recbar').classList.add('on'); $('#btnRec').classList.add('pulse'); $('#recIcon').innerHTML = '<rect x="6" y="6" width="12" height="12" rx="2"/>';
-  startGPS(); S.follow = true; $('#btnLocate').classList.add('active');
+  S.follow = true; $('#btnLocate').classList.add('active');
+  if (bgAvailable()) startBgGPS().then(ok => { if (!ok) { startGPS(); toast('No se pudo iniciar el GPS en segundo plano; mantén la pantalla encendida'); } else if (!resume) toast('Grabando en segundo plano: puedes bloquear el teléfono'); }); else { startGPS(); if (!resume && !S.settings.bgWarned) { S.settings.bgWarned = true; save(); toast('En navegador, el GPS se pausa al bloquear la pantalla. Usa la app instalada (APK) para grabar en segundo plano'); } }
   clearInterval(recTimer);recTimer = setInterval(refreshRecUI,1000);refreshRecUI();
   if (navigator.wakeLock) navigator.wakeLock.request('screen').then(w => wake = w).catch(() => { });
   requestAnimationFrame(layoutFloatingChrome);
@@ -645,6 +664,7 @@ const stopRec = async () => {
   const r = S.rec;if(!r)return;const elapsed=recElapsedMs(r); clearInterval(recTimer); if (wake) { wake.release().catch(() => { }); wake = null; }
   $('#recbar').classList.remove('on','paused'); $('#btnRec').classList.remove('pulse'); $('#recIcon').innerHTML = '<circle cx="12" cy="12" r="7"/>';
   if(recLine)map.removeLayer(recLine);recLine=null; S.rec = null; await kvSet('recording', null);requestAnimationFrame(layoutFloatingChrome);
+  if (S.bgWatch) { await stopBgGPS(); if (S.follow) startGPS(); }
   if (!S.follow) stopGPS();
   if (r.points.length < 2) return toast('Ruta demasiado corta, no se guardó');
   const def = 'Ruta ' + new Date(r.start).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
@@ -729,25 +749,103 @@ const importFeatureCollection = async (input, pid, sourceName='Importación') =>
   await save(); drawWaypoints(); syncOrder(); renderSheet();
   return {added,vectors};
 };
+/* ---- reproyección propia (sin red): UTM y Cónica Conforme de Lambert (INEGI) → WGS84 ---- */
+const ELL = { a: 6378137, f: 1 / 298.257223563 };
+const tmInverse = (x, y, lon0, k0 = 0.9996, fe = 500000, fn = 0) => { // Transverse Mercator inverse (WGS84/GRS80)
+  const { a, f } = ELL, e2 = 2 * f - f * f, ep2 = e2 / (1 - e2), n = f / (2 - f);
+  const A = a / (1 + n) * (1 + n * n / 4 + n ** 4 / 64);
+  const b1 = n / 2 - 2 * n * n / 3 + 37 * n ** 3 / 96, b2 = n * n / 48 + n ** 3 / 15, b3 = 17 * n ** 3 / 480;
+  const d1 = 2 * n - 2 * n * n / 3 - 2 * n ** 3, d2 = 7 * n * n / 3 - 8 * n ** 3 / 5, d3 = 56 * n ** 3 / 15;
+  const xi = (y - fn) / (k0 * A), eta = (x - fe) / (k0 * A);
+  const xi2 = xi - (b1 * Math.sin(2 * xi) * Math.cosh(2 * eta) + b2 * Math.sin(4 * xi) * Math.cosh(4 * eta) + b3 * Math.sin(6 * xi) * Math.cosh(6 * eta));
+  const eta2 = eta - (b1 * Math.cos(2 * xi) * Math.sinh(2 * eta) + b2 * Math.cos(4 * xi) * Math.sinh(4 * eta) + b3 * Math.cos(6 * xi) * Math.sinh(6 * eta));
+  const chi = Math.asin(Math.sin(xi2) / Math.cosh(eta2));
+  const lat = chi + d1 * Math.sin(2 * chi) + d2 * Math.sin(4 * chi) + d3 * Math.sin(6 * chi);
+  const lon = lon0 * Math.PI / 180 + Math.atan2(Math.sinh(eta2), Math.cos(xi2));
+  return [lon * 180 / Math.PI, lat * 180 / Math.PI];
+};
+const lccInverse = (x, y, p) => { // Lambert Conformal Conic 2SP inverse (EPSG 9802)
+  const { a, f } = ELL, e = Math.sqrt(2 * f - f * f), r = d => d * Math.PI / 180;
+  const phi1 = r(p.sp1), phi2 = r(p.sp2), phi0 = r(p.lat0), lam0 = r(p.lon0), fe = p.fe || 0, fn = p.fn || 0;
+  const m = ph => Math.cos(ph) / Math.sqrt(1 - e * e * Math.sin(ph) ** 2), t = ph => Math.tan(Math.PI / 4 - ph / 2) / ((1 - e * Math.sin(ph)) / (1 + e * Math.sin(ph))) ** (e / 2);
+  const m1 = m(phi1), m2 = m(phi2), t1 = t(phi1), t2 = t(phi2), t0 = t(phi0);
+  const nn = Math.abs(phi1 - phi2) < 1e-10 ? Math.sin(phi1) : (Math.log(m1) - Math.log(m2)) / (Math.log(t1) - Math.log(t2));
+  const F = m1 / (nn * t1 ** nn), r0 = a * F * t0 ** nn;
+  const xx = x - fe, yy = r0 - (y - fn); let rr = Math.sqrt(xx * xx + yy * yy); if (nn < 0) rr = -rr;
+  const tt = (rr / (a * F)) ** (1 / nn), theta = Math.atan2(nn < 0 ? -xx : xx, nn < 0 ? -yy : yy);
+  let phi = Math.PI / 2 - 2 * Math.atan(tt); for (let i = 0; i < 8; i++) phi = Math.PI / 2 - 2 * Math.atan(tt * ((1 - e * Math.sin(phi)) / (1 + e * Math.sin(phi))) ** (e / 2));
+  return [(theta / nn + lam0) * 180 / Math.PI, phi * 180 / Math.PI];
+};
+/* Lee el .prj (WKT de ESRI) y devuelve una función inversa, o null si ya es geográfico / no se reconoce */
+const prjParam = (wkt, name) => { const m = wkt.match(new RegExp('PARAMETER\\["' + name + '",\\s*(-?[\\d.]+)', 'i')); return m ? +m[1] : null; };
+const projectorFromPrj = wkt => {
+  if (!wkt) return null; const w = String(wkt);
+  if (!/PROJCS/i.test(w)) return null; // GEOGCS: ya está en grados
+  const utm = w.match(/UTM[_ ]Zone[_ ](\d{1,2})([NS])/i);
+  if (utm || /Transverse_Mercator/i.test(w)) {
+    const zone = utm ? +utm[1] : null, south = utm ? utm[2].toUpperCase() === 'S' : (prjParam(w, 'False_Northing') || 0) > 0;
+    const lon0 = prjParam(w, 'Central_Meridian') ?? (zone ? zone * 6 - 183 : null); if (lon0 == null) return null;
+    const k0 = prjParam(w, 'Scale_Factor') ?? 0.9996, fe = prjParam(w, 'False_Easting') ?? 500000, fn = prjParam(w, 'False_Northing') ?? (south ? 1e7 : 0);
+    return { name: utm ? `UTM ${zone}${utm[2].toUpperCase()}` : 'Transversa de Mercator', fn: (x, y) => tmInverse(x, y, lon0, k0, fe, fn) };
+  }
+  if (/Lambert_Conformal_Conic/i.test(w)) {
+    const p = { sp1: prjParam(w, 'Standard_Parallel_1'), sp2: prjParam(w, 'Standard_Parallel_2'), lat0: prjParam(w, 'Latitude_Of_Origin'), lon0: prjParam(w, 'Central_Meridian'), fe: prjParam(w, 'False_Easting') ?? 0, fn: prjParam(w, 'False_Northing') ?? 0 };
+    if (p.sp1 == null || p.lat0 == null || p.lon0 == null) return null; if (p.sp2 == null) p.sp2 = p.sp1;
+    return { name: 'Cónica Conforme de Lambert', fn: (x, y) => lccInverse(x, y, p) };
+  }
+  return null;
+};
+const PRESET_PROJ = { 'utm11': { name: 'UTM 11N', fn: (x, y) => tmInverse(x, y, -117) }, 'utm12': { name: 'UTM 12N', fn: (x, y) => tmInverse(x, y, -111) }, 'utm13': { name: 'UTM 13N', fn: (x, y) => tmInverse(x, y, -105) }, 'utm14': { name: 'UTM 14N', fn: (x, y) => tmInverse(x, y, -99) }, 'utm15': { name: 'UTM 15N', fn: (x, y) => tmInverse(x, y, -93) }, 'utm16': { name: 'UTM 16N', fn: (x, y) => tmInverse(x, y, -87) }, 'inegi': { name: 'INEGI · Cónica Conforme de Lambert (ITRF)', fn: (x, y) => lccInverse(x, y, { sp1: 17.5, sp2: 29.5, lat0: 12, lon0: -102, fe: 2500000, fn: 0 }) } };
+const gjCoordsLook = gj => { let projected = 0, geo = 0, bad = 0; const walk = c => { if (typeof c[0] === 'number') { const [x, y] = c; if (!Number.isFinite(x) || !Number.isFinite(y)) bad++; else if (Math.abs(x) > 180 || Math.abs(y) > 90) projected++; else geo++; } else c.forEach(walk); }; (gj.features || []).forEach(f => { if (f.geometry?.coordinates) walk(f.geometry.coordinates); }); return { projected, geo, bad }; };
+const gjReproject = (gj, proj) => { const walk = c => typeof c[0] === 'number' ? proj.fn(c[0], c[1]).concat(c.length > 2 ? [c[2]] : []) : c.map(walk); (gj.features || []).forEach(f => { if (f.geometry?.coordinates) f.geometry.coordinates = walk(f.geometry.coordinates); }); return gj; };
+const chooseProjection = fileName => new Promise(res => {
+  openModal(`<div class="modal-kicker">Importar Shape</div><h3>¿En qué proyección está “${esc(fileName)}”?</h3><p class="muted">El archivo trae coordenadas en metros y no se pudo leer su .prj. Elige el sistema (en Yucatán y Quintana Roo suele ser UTM 16N; en Campeche y Tabasco UTM 15N; INEGI usa Cónica Conforme de Lambert).</p><div class="field"><select id="prjPick">${Object.entries(PRESET_PROJ).map(([k, p]) => `<option value="${k}" ${k === (S.settings.lastProj || 'utm16') ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div><div class="actions"><button class="btn ghost" id="prjCancel">Cancelar</button><button class="btn" id="prjOk">Importar</button></div>`);
+  $('#prjCancel').onclick = () => { closeModal(); res(null); };
+  $('#prjOk').onclick = () => { const k = $('#prjPick').value; S.settings.lastProj = k; save(); closeModal(); res(PRESET_PROJ[k]); };
+});
+/* Carga un shape (objeto {shp,dbf,prj,cpg}) con tolerancia: si el .prj no se entiende, reproyecta por su cuenta o pregunta */
+const parseShapeObj = async (obj, label) => {
+  let gj = null, usedPrj = false;
+  if (obj.prj) { try { gj = await window.shp({ ...obj }); usedPrj = true; } catch (e) { console.warn('prj no reconocido por shpjs, se reproyecta localmente', e); } }
+  if (!gj) { const o = { ...obj }; delete o.prj; gj = await window.shp(o); }
+  if (gj && !gj.type && Array.isArray(gj)) gj = { type: 'FeatureCollection', features: gj.flatMap(g => g.features || []) };
+  const look = gjCoordsLook(gj);
+  if (look.projected > look.geo) {
+    let proj = projectorFromPrj(obj.prj);
+    if (!proj) proj = await chooseProjection(label); if (!proj) throw new Error('cancelado');
+    gjReproject(gj, proj); toast(`“${label}” reproyectado desde ${proj.name}`);
+    const again = gjCoordsLook(gj); if (again.projected > again.geo) throw new Error('La proyección elegida no corresponde con las coordenadas');
+  } else if (!usedPrj && obj.prj && /PROJCS/i.test(obj.prj)) { /* prj proyectado pero coords ya en grados: nada que hacer */ }
+  return gj;
+};
+const readFileSafe = async (f, as = 'buffer') => { try { return as === 'text' ? await f.text() : await f.arrayBuffer(); } catch (e) { const err = new Error('unreadable'); err.file = f.name; err.cause = e; throw err; } };
 const importShapeFiles = async files => {
   if (!window.shp) throw new Error('shpjs no disponible');
   const pid=S.settings.activeProject; let total=0, vectors=0;
   const zips=files.filter(f=>/\.zip$/i.test(f.name));
-  for (const z of zips) { const gj=await window.shp(await z.arrayBuffer()); const r=await importFeatureCollection(gj,pid,z.name.replace(/\.zip$/i,'')); total+=r.added; vectors+=r.vectors; }
+  for (const z of zips) {
+    const buf = await readFileSafe(z); let groups = null;
+    if (window.JSZip) { try { const zip = await JSZip.loadAsync(buf); const by = {}; for (const [name, entry] of Object.entries(zip.files)) { if (entry.dir || /__MACOSX/.test(name)) continue; const m = name.match(/^(.*)\.(shp|dbf|prj|cpg|shx)$/i); if (!m) continue; const base = m[1], ext = m[2].toLowerCase(); (by[base] = by[base] || {})[ext] = entry; } groups = Object.entries(by).filter(([, g]) => g.shp); } catch (e) { console.warn('zip', e); } }
+    if (groups && groups.length) {
+      for (const [base, g] of groups) { const obj = { shp: await g.shp.async('arraybuffer') }; if (g.dbf) obj.dbf = await g.dbf.async('arraybuffer'); if (g.prj) obj.prj = await g.prj.async('text'); if (g.cpg) obj.cpg = await g.cpg.async('text'); const label = base.split('/').pop(); const gj = await parseShapeObj(obj, label); const r = await importFeatureCollection(gj, pid, label); total += r.added; vectors += r.vectors; }
+    } else { const gj=await window.shp(buf); const r=await importFeatureCollection(gj,pid,z.name.replace(/\.zip$/i,'')); total+=r.added; vectors+=r.vectors; }
+  }
   const shpFiles=files.filter(f=>/\.shp$/i.test(f.name));
   for (const sf of shpFiles) {
     const base=sf.name.replace(/\.shp$/i,'').toLowerCase(); const pick=ext=>files.find(x=>x.name.replace(/\.[^.]+$/,'').toLowerCase()===base && new RegExp('\\.'+ext+'$','i').test(x.name));
     const dbf=pick('dbf'),prj=pick('prj'),cpg=pick('cpg');
-    const obj={shp:await sf.arrayBuffer()}; if(dbf)obj.dbf=await dbf.arrayBuffer(); if(prj)obj.prj=await prj.text(); if(cpg)obj.cpg=await cpg.text();
-    const gj=await window.shp(obj); const r=await importFeatureCollection(gj,pid,sf.name.replace(/\.shp$/i,'')); total+=r.added; vectors+=r.vectors;
+    const obj={shp:await readFileSafe(sf)}; if(dbf)obj.dbf=await readFileSafe(dbf); if(prj)obj.prj=await readFileSafe(prj,'text'); if(cpg)obj.cpg=await readFileSafe(cpg,'text');
+    const gj=await parseShapeObj(obj, sf.name.replace(/\.shp$/i,'')); const r=await importFeatureCollection(gj,pid,sf.name.replace(/\.shp$/i,'')); total+=r.added; vectors+=r.vectors;
   }
   return {added:total,vectors};
 };
 $('#fileIn').onchange = async e => {
   const files=[...e.target.files]; if(!files.length)return; const pid=S.settings.activeProject;
+  const before={v:new Set(S.vectors.map(v=>v.id)),t:new Set(S.tracks.map(t=>t.id)),w:new Set(S.waypoints.map(w=>w.id))};
+  const fitNew=()=>{ try { const bb=L.latLngBounds([]); S.vectors.filter(v=>!before.v.has(v.id)).forEach(v=>{const b=S.vectorLayers[v.id]?.getBounds?.(); if(b?.isValid?.())bb.extend(b)}); S.tracks.filter(t=>!before.t.has(t.id)).forEach(t=>{const b=S.trackLayers[t.id]?.getBounds?.(); if(b?.isValid?.())bb.extend(b)}); S.waypoints.filter(w=>!before.w.has(w.id)).forEach(w=>bb.extend([w.lat,w.lng])); if(bb.isValid()){ closeSheet(); map.fitBounds(bb,{padding:[50,50],maxZoom:17}); } } catch(e){ console.warn(e); } };
   try {
     if (files.some(f=>/\.(zip|shp)$/i.test(f.name))) {
-      const r=await importShapeFiles(files); toast(`Shape importado: ${r.added} elemento(s)${r.vectors ? ` · ${r.vectors} polígono(s)` : ''}`);
+      const r=await importShapeFiles(files); toast(`Shape importado: ${r.added} elemento(s)${r.vectors ? ` · ${r.vectors} polígono(s)` : ''}`); fitNew();
     } else {
       for (const f of files) {
         if (/\.kmz$/i.test(f.name)) { if(!window.JSZip) throw new Error('JSZip no disponible'); const z=await JSZip.loadAsync(await f.arrayBuffer()); const entry=Object.values(z.files).find(x=>/\.kml$/i.test(x.name)); if(!entry) throw new Error('KMZ sin KML'); const txt=await entry.async('text'); const x=new DOMParser().parseFromString(txt,'application/xml'); const feats=[]; for(const pm of x.getElementsByTagName('Placemark')){const ls=pm.getElementsByTagName('LineString')[0],pt=pm.getElementsByTagName('Point')[0],poly=pm.getElementsByTagName('Polygon')[0],name=pm.getElementsByTagName('name')[0]?.textContent||f.name;if(ls){const c=ls.getElementsByTagName('coordinates')[0]?.textContent.trim().split(/\s+/).map(v=>v.split(',').map(Number))||[];feats.push({type:'Feature',properties:{name},geometry:{type:'LineString',coordinates:c}})}else if(pt){const c=pt.getElementsByTagName('coordinates')[0]?.textContent.trim().split(',').map(Number)||[];feats.push({type:'Feature',properties:{name},geometry:{type:'Point',coordinates:c}})}else if(poly){const rings=[...poly.getElementsByTagName('LinearRing')].map(r=>(r.getElementsByTagName('coordinates')[0]?.textContent.trim().split(/\s+/).map(v=>v.split(',').map(Number))||[]));feats.push({type:'Feature',properties:{name},geometry:{type:'Polygon',coordinates:rings}})}} await importFeatureCollection({type:'FeatureCollection',features:feats},pid,f.name); continue; }
@@ -763,9 +861,9 @@ $('#fileIn').onchange = async e => {
           await importFeatureCollection({type:'FeatureCollection',features:feats},pid,f.name);
         } else { const g=JSON.parse(txt); await importFeatureCollection(g,pid,f.name); }
       }
-      toast('Importación completada');
+      toast('Importación completada'); fitNew();
     }
-  } catch(err){ console.error(err); toast('No se pudo importar: revisa el archivo Shape/ZIP y su proyección'); }
+  } catch(err){ console.error(err); if (err?.message === 'cancelado') toast('Importación cancelada'); else if (err?.message === 'unreadable') toast(`No se pudo leer “${err.file}” desde el teléfono. Si está en Google Drive u otra nube, descárgalo primero a la memoria (Descargas) o compártelo a TerraPin sin conexión`); else toast('No se pudo importar: ' + (err?.message || 'revisa el archivo Shape/ZIP y su proyección')); }
   finally { e.target.value=''; }
 };
 
@@ -1262,14 +1360,16 @@ const renderSheet = () => { refreshProjectHud(); refreshMapHud();
     B.innerHTML = `<div class="card"><div class="row" style="justify-content:space-between"><div><b>Tema oscuro</b><div class="muted">Cristal oscuro; desactívalo para trabajar a pleno sol</div></div><button class="toggle ${S.settings.theme === 'dark' ? 'on' : ''}" id="mTheme"></button></div></div>
     <div class="card"><div class="row" style="justify-content:space-between"><div><b>Seguir mi posición al grabar</b><div class="muted">El mapa se centra en ti automáticamente</div></div><button class="toggle ${S.settings.autoFollow ? 'on' : ''}" id="mFollow"></button></div></div>
     <div class="card"><b>Precisión mínima del GPS</b><div class="muted">Se ignoran lecturas peores a <span id="mAccV">${S.settings.minAcc}</span> m. Bajo árboles o edificios puedes subirlo.</div><input type="range" min="10" max="150" step="5" value="${S.settings.minAcc}" id="mAcc"></div>
+    <div class="card modern-feature"><b>Grabación en segundo plano</b><div class="muted">${bgAvailable() ? 'Disponible: la ruta se sigue grabando con la pantalla bloqueada o la app minimizada (verás una notificación fija). Si aun así se corta, desactiva la optimización de batería para TerraPin en Ajustes del teléfono y elige ubicación “Todo el tiempo”.' : 'En el navegador, Android pausa el GPS al bloquear la pantalla. Instala la app (APK) para grabar en segundo plano.'}</div>${bgAvailable() ? '<button class="btn sm ghost" id="mBgSettings" style="margin-top:8px">Abrir ajustes de la app</button>' : ''}</div>
     <div class="card"><b>Almacenamiento persistente</b><div class="muted">Evita que el sistema borre tus mapas descargados</div><button class="btn sm ghost" id="mPersist" style="margin-top:8px">Solicitar</button></div>
     <div class="card"><b>Copia de seguridad</b><div class="muted">Exporta todas las carpetas, proyectos, rutas y puntos a un archivo</div><div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm ghost" id="mBackup">Exportar respaldo</button><button class="btn sm ghost" id="mRestore">Restaurar respaldo</button></div></div>
     <div class="card modern-feature"><b>Sentinel-2 · 10 m (cuenta Copernicus)</b><div class="muted">${s2Ready() ? 'Configurado. Imágenes de 10 m con filtro de nubes de los últimos ' + s2Cfg().days + ' días.' : 'La mejor calidad gratuita: calles principales y lotes, pase cada 5 días, filtro de nubes. Necesita tu ID gratuito de Copernicus.'}</div><div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm" id="mS2">${s2Ready() ? 'Cambiar cuenta' : 'Configurar'}</button><button class="btn sm ghost" id="mS2Guide">Guía paso a paso</button></div></div>
     <div class="card modern-feature"><b>Mapas offline</b><div class="muted">Administra las áreas descargadas para trabajo sin señal.</div><button class="btn sm ghost" id="mOffline" style="margin-top:8px">Abrir mapas offline</button></div><div class="card"><b>Intercambio GIS</b><div class="muted">Importa Shape/KML/KMZ/GPX/GeoJSON y exporta toda la información en formatos GIS.</div><div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm ghost" id="mImportGis">Importar GIS</button><button class="btn sm ghost" id="mKml">KML</button><button class="btn sm ghost" id="mKmz">KMZ</button><button class="btn sm ghost" id="mShp">Shape</button></div></div><div class="card"><b>Reporte general</b><div class="muted">Genera una lámina cartográfica profesional con simbología, norte, escala, rutas, capas y puntos.</div><div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm" id="mPdf">Generar PDF</button><button class="btn sm ghost" id="mPrint">Imprimir</button></div></div>
-    <div class="card about"><b>TerraPin</b> <span class="muted">v4.3 · Obsidian Glass</span><p>Mapas sin conexión, satélite en vivo (NASA), satélite HD por fecha (Esri, Google, Bing), grabación de rutas GPS, navegación híbrida, medición de distancias y áreas (ha/m²) y proyectos por carpetas.</p><p><b>Desarrollada por Jesús Reynaldo Ordoñez Pech.</b></p><p class="muted">Mapas: OpenStreetMap y colaboradores, CARTO, Esri, OpenTopoMap, CyclOSM, OpenRailwayMap, NASA GIBS/FIRMS, NOAA GOES-East, NASA HLS, Esri Wayback, Google y Bing (teselas públicas, uso no comercial), Copernicus Sentinel-2 cloudless (EOX, CC BY-NC-SA). Respeta las condiciones de uso de cada proveedor al descargar áreas grandes.</p></div>`;
+    <div class="card about"><b>TerraPin</b> <span class="muted">v4.4 · Obsidian Glass</span><p>Mapas sin conexión, satélite en vivo (NASA), satélite HD por fecha (Esri, Google, Bing), grabación de rutas GPS, navegación híbrida, medición de distancias y áreas (ha/m²) y proyectos por carpetas.</p><p><b>Desarrollada por Jesús Reynaldo Ordoñez Pech.</b></p><p class="muted">Mapas: OpenStreetMap y colaboradores, CARTO, Esri, OpenTopoMap, CyclOSM, OpenRailwayMap, NASA GIBS/FIRMS, NOAA GOES-East, NASA HLS, Esri Wayback, Google y Bing (teselas públicas, uso no comercial), Copernicus Sentinel-2 cloudless (EOX, CC BY-NC-SA). Respeta las condiciones de uso de cada proveedor al descargar áreas grandes.</p></div>`;
     $('#mTheme').onclick = () => { setTheme(S.settings.theme === 'dark' ? 'light' : 'dark'); renderSheet(); };
     $('#mFollow').onclick = () => { S.settings.autoFollow = !S.settings.autoFollow; save(); renderSheet(); };
     $('#mAcc').oninput = e => { S.settings.minAcc = +e.target.value; $('#mAccV').textContent = e.target.value; }; $('#mAcc').onchange = save;
+    $('#mBgSettings')?.addEventListener('click', () => bgPlugin()?.openSettings?.().catch(() => toast('No se pudieron abrir los ajustes')));
     $('#mPersist').onclick = async () => { const ok = await navigator.storage?.persist?.(); toast(ok ? 'Almacenamiento protegido' : 'El navegador no lo permitió'); };
     $('#mBackup').onclick = () => download('terrapin-respaldo.json', JSON.stringify({ v: 2, folders: S.folders, projects: S.projects, waypoints: S.waypoints, tracks: S.tracks, vectors:S.vectors, settings: S.settings }), 'application/json');
     $('#mS2').onclick=openS2Setup; $('#mS2Guide').onclick=()=>openModal(s2Guide());
@@ -1297,7 +1397,7 @@ $('#btnTheme').onclick = () => setTheme(S.settings.theme === 'dark' ? 'light' : 
   const pending = await kvGet('recording', null);
   if (pending && pending.points.length) { if (confirm('Había una grabación en curso. ¿Continuarla?')) { startRec(pending); $('#sDist').textContent = fmtDist(pending.dist); } else await kvSet('recording', null); }
   window.addEventListener('online', () => toast('Conexión restablecida')); window.addEventListener('offline', () => toast('Sin conexión: se usarán los mapas descargados'));
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=4.3', {updateViaCache:'none'}).then(r=>r.update()).catch(() => { });
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=4.4', {updateViaCache:'none'}).then(r=>r.update()).catch(() => { });
   L.control.scale({ imperial: false, maxWidth: 120, position: 'bottomleft' }).addTo(map);
   renderSatPanel();
   if (S.settings.base === 'goesEast' && S.settings.satAuto) useLatestGoes(true);

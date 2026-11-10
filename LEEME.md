@@ -1,11 +1,11 @@
-# TerraPin 4.3 · Obsidian Glass
+# TerraPin 4.4 · Obsidian Glass
 
 Proyecto web (Capacitor) listo para generar el APK.
 
 ## Opción A — GitHub Actions (gratis, sin instalar nada)
 1. Crea un repositorio en GitHub y sube **todo el contenido de esta carpeta** (incluida la carpeta oculta `.github`).
 2. Entra a la pestaña **Actions** → "Compilar APK de TerraPin" → **Run workflow** (o simplemente haz push a `main`).
-3. Al terminar (≈5 min), descarga el artefacto **TerraPin-4.0-debug** → dentro viene `app-debug.apk`.
+3. Al terminar (≈5 min), descarga el artefacto **TerraPin-4.4-debug** → dentro viene `app-debug.apk`.
 4. Pásalo al teléfono e instálalo (activa "instalar apps desconocidas").
 
 ## Opción B — Android Studio en tu PC
@@ -20,6 +20,11 @@ Agrega en `android/app/src/main/AndroidManifest.xml` los permisos
 
 ## Opción C — Sobre tu proyecto Capacitor actual
 Reemplaza tu carpeta `www` por la de aquí y ejecuta `npx cap sync android`.
+
+## Novedades 4.4
+- **Grabación de rutas en segundo plano (APK)**: la ruta sigue registrándose con la pantalla bloqueada o la app minimizada, mediante un servicio nativo con notificación fija, hasta que pulses Finalizar. Al iniciar la primera grabación Android pedirá permiso de ubicación y de notificaciones; concédelos. Si tu teléfono aun así corta la grabación, en Más → “Grabación en segundo plano” → *Abrir ajustes de la app* desactiva la optimización de batería y elige ubicación “Todo el tiempo”. (En el navegador/PWA Android sigue pausando el GPS al bloquear: usa la app instalada.)
+- **Shapes sin conexión y con cualquier proyección**: la importación nunca usa internet. Ahora, si el `.prj` no se reconoce, TerraPin reproyecta por su cuenta UTM (cualquier zona) y Cónica Conforme de Lambert (INEGI/ITRF); si el archivo no trae `.prj`, pregunta la zona (UTM 11N–16N o INEGI). Soporta ZIP con varias capas y carpetas internas, avisa con claridad cuando el archivo no se puede leer (p. ej. está en Google Drive sin descargar) y centra el mapa en lo importado.
+- Recordatorio: el **grosor de línea y el relleno** de los shapes y polígonos se ajustan en Capas (deslizadores bajo cada capa) o con el botón *Editar* / *Estilo y datos*.
 
 ## Novedades 4.3
 - **Área / polígono**: nuevo botón junto a Medir. Toca los vértices del terreno (o usa “+ GPS” parado en cada esquina), arrastra los vértices para ajustarlos y cierra tocando el primero. Muestra en vivo **perímetro** y **área en hectáreas y m²**; al guardar queda como capa del proyecto (sale en Capas, KML/KMZ/Shape, PDF y en el inventario del PDF con su área).
